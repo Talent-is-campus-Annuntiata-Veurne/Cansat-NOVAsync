@@ -21,6 +21,11 @@ try:
 except Exception:
     init_sensor = None
     read_environment = None
+try:
+    from gps_helper import init_gps, read_gps_data
+except Exception:
+    init_gps = None
+    read_gps_data = None
 
 led = Pin(25, Pin.OUT)
 
@@ -55,7 +60,9 @@ try:
 except Exception:
     try:
         with open(LOGFILE, "w") as _f:
-            _f.write("counter,time_hms,tempC,pressure_hPa,humidity_pct_or_-1,last_ack_rssi_or_nan\n")
+            _f.write(
+                "counter,time_hms,tempC,pressure_hPa,humidity_pct_or_-1,last_ack_rssi_or_nan,lat_deg,lon_deg,alt_m,speed_kmh,satellites,fix_flag,gps_time\n"
+            )
     except Exception:
         pass  # Ignore filesystem errors (e.g., read-only FS)
 
@@ -144,10 +151,23 @@ def format_time_only():
     return "%02d:%02d:%02d" % (tm[3], tm[4], tm[5])
 
 
+def format_gps_time(timestamp_tuple):
+    if not timestamp_tuple:
+        return "NOFIX"
+    try:
+        y, m, d, hh, mm, ss = timestamp_tuple
+        return "%02d:%02d:%02d" % (hh, mm, ss)
+    except Exception:
+        return "NOFIX"
+
+
 sync_rtc_with_host()
 
 # --- Sensor setup (BME280/BMP280 on I2C0, SDA=GP8, SCL=GP9) ---
 sensor = init_sensor() if callable(init_sensor) else None
+
+# --- GPS setup (UART0 on GP0/GP1) ---
+gps = init_gps() if callable(init_gps) else None
 
 # Send a packet and waits for its ACK.
 # Note you can only send a packet up to 60 bytes in length.
@@ -173,6 +193,25 @@ while True:
         except:
             return "nan"
 
+    def _fmt_coord(v):
+        try:
+            return ("%0.5f" % float(v)).rstrip("0").rstrip(".")
+        except:
+            return "nan"
+
+    gps_info = read_gps_data(gps) if callable(read_gps_data) else None
+    lat = _fmt_coord(gps_info.get("latitude")) if gps_info else "nan"
+    lon = _fmt_coord(gps_info.get("longitude")) if gps_info else "nan"
+    alt = _fmt(gps_info.get("altitude_m"), 1) if gps_info else "nan"
+    spd = _fmt(gps_info.get("speed_kmh"), 1) if gps_info else "nan"
+    sats = (
+        str(gps_info.get("satellites"))
+        if gps_info and gps_info.get("satellites") is not None
+        else "nan"
+    )
+    fix_flag = "1" if gps_info and gps_info.get("has_fix") else "0"
+    gps_time = format_gps_time(gps_info.get("timestamp") if gps_info else None)
+
     msg = "SENS;c=%d;t=%s;p=%s;h=%s;lr=%s" % (
         counter,
         _fmt(t, 1),
@@ -181,15 +220,40 @@ while True:
         "nan" if last_rssi is None else _fmt(last_rssi, 1),
     )
     ack = rfm.send_with_ack(bytes(msg, "utf-8"))
-    # CSV output only: counter, time_hms, tempC, pressure_hPa, humidity_pct_or_-1, last_ack_rssi_or_nan
+    if gps_info and gps_info.get("has_fix"):
+        def _fmt_radio(value, decimals=4):
+            try:
+                return ("%0." + str(decimals) + "f") % float(value)
+            except:
+                return "nan"
+
+        gps_msg = "GPS;c=%d;la=%s;lo=%s;al=%s;sp=%s;sa=%s" % (
+            counter,
+            _fmt_radio(gps_info.get("latitude"), 4),
+            _fmt_radio(gps_info.get("longitude"), 4),
+            _fmt_radio(gps_info.get("altitude_m"), 1),
+            _fmt_radio(gps_info.get("speed_kmh"), 1),
+            sats,
+        )
+        rfm.send_with_ack(bytes(gps_msg, "utf-8"))
+    # CSV output only: counter, time_hms, tempC, pressure_hPa, humidity_pct_or_-1,
+    # last_ack_rssi_or_nan, lat_deg, lon_deg, alt_m, speed_kmh, satellites,
+    # fix_flag, gps_time
     time_str = format_time_only()
-    csv = "%d,%s,%s,%s,%s,%s" % (
+    csv = "%d,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s" % (
         counter,
         time_str,
         _fmt(t, 1),
         _fmt(p, 1),
         _fmt(-1 if h is None else h, 1),
         "nan" if last_rssi is None else _fmt(last_rssi, 1),
+        lat,
+        lon,
+        alt,
+        spd,
+        sats,
+        fix_flag,
+        gps_time,
     )
     print(csv)
     # Append to log file

@@ -43,17 +43,21 @@ while True:
     else:
         # Decode to ASCII text and parse our compact key=value payload
         packet_text = str(packet, "ascii")
+        parts = packet_text.split(";")
+        if not parts:
+            continue
+        prefix = parts[0]
         data = {}
         try:
-            if packet_text.startswith("SENS;"):
-                for part in packet_text.split(";")[1:]:
-                    if "=" in part:
-                        k, v = part.split("=", 1)
-                        data[k] = v
+            for part in parts[1:]:
+                if "=" in part:
+                    k, v = part.split("=", 1)
+                    data[k] = v
         except Exception:
             data = {}
-        if data:
-            # CSV output only: counter, tempC, pressure_hPa, humidity_pct_or_-1, rssi
+
+        if prefix == "SENS" and data:
+            # CSV output: counter, tempC, pressure_hPa, humidity_pct_or_-1, rssi
             c = data.get("c", "nan")
             t = data.get("t", "nan")
             p = data.get("p", "nan")
@@ -61,7 +65,14 @@ while True:
             rfm.sample_rssi()
             rssi = rfm.rssi
             try:
-                print("%s,%s,%s,%s,%0.1f" % (c, t, p, h, float(rssi)))
+                print("SENS,%s,%s,%s,%s,%0.1f" % (c, t, p, h, float(rssi)))
             except Exception:
-                # Fallback without formatting if conversion fails
-                print("%s,%s,%s,%s,%s" % (c, t, p, h, rssi))
+                print("SENS,%s,%s,%s,%s,%s" % (c, t, p, h, rssi))
+        elif prefix == "GPS" and data:
+            c = data.get("c", "nan")
+            lat = data.get("la", "nan")
+            lon = data.get("lo", "nan")
+            alt = data.get("al", "nan")
+            spd = data.get("sp", "nan")
+            sats = data.get("sa", "nan")
+            print("GPS,%s,%s,%s,%s,%s,%s" % (c, lat, lon, alt, spd, sats))
