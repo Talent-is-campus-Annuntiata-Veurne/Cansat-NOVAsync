@@ -31,10 +31,7 @@ rfm.frequency_mhz = FREQ
 rfm.encryption_key = (ENCRYPTION_KEY)
 rfm.node = NODE_ID  # This instance is the node 123
 
-print('Freq            :', rfm.frequency_mhz)
-print('NODE            :', rfm.node)
-
-print("Waiting for packets...")
+# Suppress non-CSV console output
 while True:
     packet = rfm.receive(with_ack=True)
     # Optionally change the receive timeout from its default of 0.5 seconds:
@@ -44,12 +41,8 @@ while True:
         # Packet has not been received
         pass
     else:
-        # Received a packet!
-        print("Received (raw bytes):", packet)
-        # And decode to ASCII text
+        # Decode to ASCII text and parse our compact key=value payload
         packet_text = str(packet, "ascii")
-        print("Received (ASCII):", packet_text)
-        # Optional: parse our compact key=value payload
         data = {}
         try:
             if packet_text.startswith("SENS;"):
@@ -57,10 +50,18 @@ while True:
                     if "=" in part:
                         k, v = part.split("=", 1)
                         data[k] = v
-        except Exception as e:
-            print("Parse error:", e)
+        except Exception:
+            data = {}
         if data:
-            print("Parsed:", data)
-        rfm.sample_rssi()
-        print("RSSI            : %3.2f" % rfm.rssi)
-        print("-" * 40)
+            # CSV output only: counter, tempC, pressure_hPa, humidity_pct_or_-1, rssi
+            c = data.get("c", "nan")
+            t = data.get("t", "nan")
+            p = data.get("p", "nan")
+            h = data.get("h", "nan")
+            rfm.sample_rssi()
+            rssi = rfm.rssi
+            try:
+                print("%s,%s,%s,%s,%0.1f" % (c, t, p, h, float(rssi)))
+            except Exception:
+                # Fallback without formatting if conversion fails
+                print("%s,%s,%s,%s,%s" % (c, t, p, h, rssi))

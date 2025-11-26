@@ -34,7 +34,13 @@ samenwerking en versiebeheer te ondersteunen.
 
 -   Ontwikkel en test code in de `/src` map.\
 -   Documenteer wijzigingen in de relevante `/docs` bestanden.\
--   Commit en push regelmatig om teamleden up-to-date te houden.
+-   Commit en push regelmatig om teamleden up-to-date te houden.\
+-   Voor automatische tijdssynchronisatie kun je het hostscripts `tools/pico_time_sync.py` gebruiken. Installeer eerst `pyserial` (`pip install pyserial`) en start vervolgens
+    ```bash
+    python tools/pico_time_sync.py COM5
+    ```
+    waarbij `COM5` vervangen wordt door de seriële poort van jouw Pico. Het script wacht op de `TIME_SYNC`-prompt van `main.py` en stuurt automatisch de UNIX-tijd.
+-   Wil je dit rechtstreeks in Thonny doen? Kopieer `tools/thonny_plugin/pico_time_sync_plugin.py` naar jouw lokale Thonny plug-in map (`%APPDATA%\Thonny\plugins` op Windows). Na het herstarten van Thonny wordt bij elke `TIME_SYNC`-prompt automatisch de huidige tijd ingestuurd.
 
 ## Contributies
 
