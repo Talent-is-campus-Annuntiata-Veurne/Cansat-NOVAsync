@@ -69,6 +69,7 @@ except Exception:
 # --- RTC synchronisation ---
 rtc = None
 rtc_synced = False
+LOCAL_TIME_OFFSET_MIN = 60  # Veurne is UTC+1 in winter; set 120 for UTC+2 (summer)
 try:
     rtc = RTC()
 except Exception:
@@ -155,10 +156,26 @@ def format_gps_time(timestamp_tuple):
     if not timestamp_tuple:
         return "NOFIX"
     try:
-        y, m, d, hh, mm, ss = timestamp_tuple
-        return "%02d:%02d:%02d" % (hh, mm, ss)
+        hh = mm = ss = None
+        if hasattr(timestamp_tuple, "tm_hour"):
+            hh = int(getattr(timestamp_tuple, "tm_hour", 0) or 0)
+            mm = int(getattr(timestamp_tuple, "tm_min", 0) or 0)
+            ss = int(getattr(timestamp_tuple, "tm_sec", 0) or 0)
+        elif isinstance(timestamp_tuple, (tuple, list)) and len(timestamp_tuple) >= 6:
+            hh = int(timestamp_tuple[3] or 0)
+            mm = int(timestamp_tuple[4] or 0)
+            ss = int(timestamp_tuple[5] or 0)
+        if hh is None:
+            return "NOFIX"
+        offset_seconds = LOCAL_TIME_OFFSET_MIN * 60
+        total_seconds = (hh * 3600 + mm * 60 + ss + offset_seconds) % 86400
+        local_h = total_seconds // 3600
+        local_m = (total_seconds % 3600) // 60
+        local_s = total_seconds % 60
+        return "%02d:%02d:%02d" % (local_h, local_m, local_s)
     except Exception:
-        return "NOFIX"
+        pass
+    return "NOFIX"
 
 
 sync_rtc_with_host()
@@ -168,15 +185,18 @@ sensor = init_sensor() if callable(init_sensor) else None
 
 # --- GPS setup (UART0 on GP0/GP1) ---
 gps = init_gps() if callable(init_gps) else None
+GPS_SLEEP_SLICE_MS = 50
+LOOP_PERIOD_MS = 1000  # Target 1 Hz telemetry cadence
 
 # Send a packet and waits for its ACK.
 # Note you can only send a packet up to 60 bytes in length.
 counter = 1
 last_rssi = None  # Capture the RSSI when receing ack
-rfm.ack_retries = 3  # 3 attempts to receive ACK
-rfm.ack_wait = 0.5  # 500ms, time to wait for ACK
+rfm.ack_retries = 1  # Limit retries so a missing ACK doesn't stall the loop
+rfm.ack_wait = 0.2  # Shorter wait keeps loop close to 1 Hz
 rfm.destination = BASESTATION_ID  # Send to specific node 100
 while True:
+    loop_start = time.ticks_ms()
     led.toggle()
     # Read sensor values (temperature C, pressure hPa, humidity %)
     # Some BMP280 variants don't return humidity (None)
@@ -266,4 +286,9 @@ while True:
     if ack:
         last_rssi = rfm.rssi
     counter += 1
-    time.sleep(1)
+    # Stay close to the 1 Hz cadence by servicing the GPS until the next slot.
+    deadline = time.ticks_add(loop_start, LOOP_PERIOD_MS)
+    while time.ticks_diff(deadline, time.ticks_ms()) > 0:
+        if callable(read_gps_data):
+            read_gps_data(gps, poll_window_ms=0)
+        time.sleep_ms(GPS_SLEEP_SLICE_MS)
