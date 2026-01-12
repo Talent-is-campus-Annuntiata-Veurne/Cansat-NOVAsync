@@ -31,6 +31,24 @@ rfm.frequency_mhz = FREQ
 rfm.encryption_key = (ENCRYPTION_KEY)
 rfm.node = NODE_ID  # This instance is the node 123
 
+RSSI_LOGFILE = "receiver_rssi_log.txt"
+try:
+    open(RSSI_LOGFILE, "r").close()
+except Exception:
+    try:
+        with open(RSSI_LOGFILE, "w") as _f:
+            _f.write("counter,rssi_db\n")
+    except Exception:
+        pass
+
+
+def _log_rssi(counter, rssi_value):
+    try:
+        with open(RSSI_LOGFILE, "a") as _f:
+            _f.write("%s,%s\n" % (counter, rssi_value))
+    except Exception:
+        pass
+
 # Suppress non-CSV console output
 while True:
     packet = rfm.receive(with_ack=True)
@@ -67,8 +85,10 @@ while True:
             rssi = rfm.rssi
             try:
                 print("SENS,%s,%s,%s,%s,%s,%0.1f" % (c, t, p, bh, h, float(rssi)))
+                _log_rssi(c, "%0.1f" % float(rssi))
             except Exception:
                 print("SENS,%s,%s,%s,%s,%s,%s" % (c, t, p, bh, h, rssi))
+                _log_rssi(c, rssi)
         elif prefix == "GPS" and data:
             c = data.get("c", "nan")
             lat = data.get("la", "nan")
