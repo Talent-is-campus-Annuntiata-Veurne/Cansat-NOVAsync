@@ -1,0 +1,66 @@
+CANSAT Onboard Software (ASCII Flowchart)
+=========================================
+
+          +-------------------------+
+          | Thonny TIME_SYNC plugin |
+          | injects host timestamp  |
+          +-----------+-------------+
+                      |
+                      v
+          +-------------------------+
+          | main.py boot            |
+          | import helpers, init    |
+          | RFM69 + sensor_log file |
+          +-----------+-------------+
+                      |
+                      v
+          +-------------------------+
+          | RTC synchronisation     |
+          | wait for timestamp      |
+          +-----------+-------------+
+                      |
+                      v
+          +-------------------------+
+          | Sensor setup            |
+          | init BME280 + GPS +     |
+          | baro baseline state     |
+          +-----------+-------------+
+                      |
+                      |
+        +-------------+-------------+
+        |                           |
+        v                           v
++---------------+          +---------------+
+| bmptest_edit  |          | gps_helper    |
+| read temp/p/h |          | poll UART GPS |
+| baro altitude |          | convert knots |
++-------+-------+          +-------+-------+
+        |                          |
+        +-------------+------------+
+                      |
+                      v
+          +-------------------------+
+          | main.py data formatter  |
+          | CSV + baro alt + GPS    |
+          | payload construction    |
+          +-----------+-------------+
+                      |
+        +-------------+-------------+
+        |                           |
+        v                           v
++---------------+          +---------------+
+| sensor_log    |          | RFM69 packets |
+| local backup  |          | SENS & GPS    |
++-------+-------+          +-------+-------+
+        |                           |
+        +-------------+-------------+
+                      |
+                      v
+          +-------------------------+
+          | Ground station receives |
+          | + displays CSV streams  |
+          +-------------------------+
+
+Legend: main.py drives the flow (vertical path). Side boxes show helper
+modules feeding data into the loop before logging locally and sending to the
+receiver.

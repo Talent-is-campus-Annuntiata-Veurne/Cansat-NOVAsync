@@ -17,10 +17,15 @@ try:
 except Exception:
     os = None
 try:
-    from bmptest_edit import init_sensor, read_environment
+    from bmptest_edit import (
+        init_sensor,
+        read_environment,
+        calculate_baro_altitude,
+    )
 except Exception:
     init_sensor = None
     read_environment = None
+    calculate_baro_altitude = None
 try:
     from gps_helper import init_gps, read_gps_data
 except Exception:
@@ -61,7 +66,7 @@ except Exception:
     try:
         with open(LOGFILE, "w") as _f:
             _f.write(
-                "counter,time_hms,tempC,pressure_hPa,humidity_pct_or_-1,last_ack_rssi_or_nan,lat_deg,lon_deg,alt_m,speed_kmh,satellites,fix_flag,gps_time\n"
+                "counter,time_hms,tempC,pressure_hPa,baro_alt_m,humidity_pct_or_-1,last_ack_rssi_or_nan,lat_deg,lon_deg,alt_m,speed_kmh,satellites,fix_flag,gps_time\n"
             )
     except Exception:
         pass  # Ignore filesystem errors (e.g., read-only FS)
@@ -70,6 +75,8 @@ except Exception:
 rtc = None
 rtc_synced = False
 LOCAL_TIME_OFFSET_MIN = 60  # Veurne is UTC+1 in winter; set 120 for UTC+2 (summer)
+BARO_DEFAULT_REF_HPA = 1013.25  # Used until a local baseline is learnt
+BARO_BASELINE_SAMPLES = 20  # Number of pressure samples to average for baseline
 try:
     rtc = RTC()
 except Exception:
@@ -187,6 +194,9 @@ sensor = init_sensor() if callable(init_sensor) else None
 gps = init_gps() if callable(init_gps) else None
 GPS_SLEEP_SLICE_MS = 50
 LOOP_PERIOD_MS = 1000  # Target 1 Hz telemetry cadence
+baro_ref_hpa = None
+_baro_baseline_sum = 0.0
+_baro_baseline_count = 0
 
 # Send a packet and waits for its ACK.
 # Note you can only send a packet up to 60 bytes in length.
@@ -206,6 +216,23 @@ while True:
             t, p, h = read_environment(sensor)
         except Exception:
             t = p = h = None
+    baro_alt = None
+    if p is not None:
+        if baro_ref_hpa is None:
+            try:
+                _baro_baseline_sum += float(p)
+                _baro_baseline_count += 1
+            except Exception:
+                pass
+            if _baro_baseline_count >= BARO_BASELINE_SAMPLES:
+                baro_ref_hpa = _baro_baseline_sum / _baro_baseline_count
+                print("BARO REF locked at %0.2f hPa" % baro_ref_hpa)
+        ref_hpa = baro_ref_hpa if baro_ref_hpa is not None else BARO_DEFAULT_REF_HPA
+        if callable(calculate_baro_altitude):
+            try:
+                baro_alt = calculate_baro_altitude(p, reference_pressure_hpa=ref_hpa, temperature_c=t)
+            except Exception:
+                baro_alt = None
 
     def _fmt(v, nd=1):
         try:
@@ -232,10 +259,11 @@ while True:
     fix_flag = "1" if gps_info and gps_info.get("has_fix") else "0"
     gps_time = format_gps_time(gps_info.get("timestamp") if gps_info else None)
 
-    msg = "SENS;c=%d;t=%s;p=%s;h=%s;lr=%s" % (
+    msg = "SENS;c=%d;t=%s;p=%s;bh=%s;h=%s;lr=%s" % (
         counter,
         _fmt(t, 1),
         _fmt(p, 1),
+        _fmt(baro_alt, 1),
         _fmt(-1 if h is None else h, 1),
         "nan" if last_rssi is None else _fmt(last_rssi, 1),
     )
@@ -260,11 +288,12 @@ while True:
     # last_ack_rssi_or_nan, lat_deg, lon_deg, alt_m, speed_kmh, satellites,
     # fix_flag, gps_time
     time_str = format_time_only()
-    csv = "%d,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s" % (
+    csv = "%d,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s" % (
         counter,
         time_str,
         _fmt(t, 1),
         _fmt(p, 1),
+        _fmt(baro_alt, 1),
         _fmt(-1 if h is None else h, 1),
         "nan" if last_rssi is None else _fmt(last_rssi, 1),
         lat,

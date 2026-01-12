@@ -61,13 +61,14 @@ while True:
             c = data.get("c", "nan")
             t = data.get("t", "nan")
             p = data.get("p", "nan")
+            bh = data.get("bh", "nan")
             h = data.get("h", "nan")
             rfm.sample_rssi()
             rssi = rfm.rssi
             try:
-                print("SENS,%s,%s,%s,%s,%0.1f" % (c, t, p, h, float(rssi)))
+                print("SENS,%s,%s,%s,%s,%s,%0.1f" % (c, t, p, bh, h, float(rssi)))
             except Exception:
-                print("SENS,%s,%s,%s,%s,%s" % (c, t, p, h, rssi))
+                print("SENS,%s,%s,%s,%s,%s,%s" % (c, t, p, bh, h, rssi))
         elif prefix == "GPS" and data:
             c = data.get("c", "nan")
             lat = data.get("la", "nan")
