@@ -41,6 +41,8 @@ samenwerking en versiebeheer te ondersteunen.
     ```
     waarbij `COM5` vervangen wordt door de seriële poort van jouw Pico. Het script wacht op de `TIME_SYNC`-prompt van `main.py` en stuurt automatisch de UNIX-tijd.
 -   Wil je dit rechtstreeks in Thonny doen? Kopieer `tools/thonny_plugin/pico_time_sync_plugin.py` naar jouw lokale Thonny plug-in map (`%APPDATA%\Thonny\plugins` op Windows). Na het herstarten van Thonny wordt bij elke `TIME_SYNC`-prompt automatisch de huidige tijd ingestuurd.
+-   Wil je de Kitronik Pico Robotics Board gebruiken om twee CNC3-steppermotoren via je toetsenbord te besturen? Volg de stap-voor-stap handleiding in [src/receiver/motor/KeyboardStepperTutorial.md](src/receiver/motor/KeyboardStepperTutorial.md).
+-   Liever een webinterface met pijltjestoetsen en knoppen? Start de lokale bridge [src/receiver/motor/web_control_server.py](src/receiver/motor/web_control_server.py) (vereist `pip install flask pyserial`) en ga naar `http://localhost:8765` voor de bedieningspagina.
 
 ## Contributies
 

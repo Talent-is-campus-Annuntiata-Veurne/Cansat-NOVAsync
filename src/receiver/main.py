@@ -36,7 +36,7 @@ print("Receiver boot complete, listening...")
 RECEIVER_LOGFILE = "receiver_log.txt"
 RECEIVER_HEADER = (
     "counter,time_hms,tempC,pressure_hPa,baro_alt_m,humidity_pct_or_-1,last_ack_rssi_or_nan,"
-    "lat_deg,lon_deg,alt_m,speed_kmh,satellites,fix_flag,gps_time,rx_rssi_db\n"
+    "lat_deg,lon_deg,alt_m,speed_kmh,satellites,fix_flag,gps_time,rx_rssi_dbm\n"
 )
 try:
     open(RECEIVER_LOGFILE, "r").close()
@@ -98,7 +98,7 @@ def _flush_entry(counter):
         entry.get("rx_rssi", "nan"),
     )
     print(line)
-    print("signal: %s dB" % entry.get("rx_rssi", "nan"))
+    print("signal: %s dBm" % entry.get("rx_rssi", "nan"))
     _append_receiver_log(line)
 
 

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pico Stepper Web Controller</title>
+    <style>
+        :root {
+            font-family: "Segoe UI", Arial, sans-serif;
+            color: #0b1728;
+            background: #f3f6fb;
+        }
+        body {
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        h1 {
+            margin: 0;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(3, 90px);
+            grid-template-rows: repeat(3, 90px);
+            gap: 0.75rem;
+        }
+        button {
+            font-size: 1.2rem;
+            border: none;
+            border-radius: 16px;
+            background: #1d4ed8;
+            color: #fff;
+            box-shadow: 0 10px 25px rgba(18, 53, 150, 0.25);
+            cursor: pointer;
+            transition: transform 120ms ease, box-shadow 120ms ease;
+        }
+        button:active {
+            transform: translateY(2px);
+            box-shadow: 0 6px 15px rgba(18, 53, 150, 0.35);
+        }
+        button.secondary {
+            background: #0f172a;
+        }
+        #status {
+            min-height: 1.5rem;
+            font-weight: 600;
+        }
+        .card {
+            width: min(480px, 94vw);
+            background: #fff;
+            border-radius: 18px;
+            padding: 1.5rem;
+            box-shadow: 0 20px 60px rgba(15, 23, 42, 0.15);
+        }
+        .custom-command {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        .custom-command input {
+            flex: 1;
+            padding: 0.6rem 0.9rem;
+            border-radius: 10px;
+            border: 1px solid #cbd5f5;
+            font-size: 1rem;
+        }
+        .angles {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 1rem;
+            padding: 0.75rem 1rem;
+            background: #eef2ff;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        .angles span {
+            display: inline-flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            font-size: 0.95rem;
+        }
+        .angles strong {
+            font-size: 1.4rem;
+        }
+        .targets {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+        .target-card {
+            background: #fff7ed;
+            border-radius: 14px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.25);
+        }
+        .target-card input {
+            border: 1px solid #fcd34d;
+            border-radius: 8px;
+            padding: 0.4rem 0.6rem;
+            font-size: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Stepper Control</h1>
+        <p>Run `web_control_server.py` on the host, keep the Pico's `main.py` active, then use the buttons or your keyboard arrows.</p>
+        <div class="grid">
+            <div></div>
+            <button data-cmd="up">▲</button>
+            <div></div>
+            <button data-cmd="left">◀</button>
+            <button data-cmd="release" class="secondary">●</button>
+            <button data-cmd="right">▶</button>
+            <div></div>
+            <button data-cmd="down">▼</button>
+            <div></div>
+        </div>
+        <div class="angles">
+            <span>Stepper 1
+                <strong id="angle1">0.0°</strong>
+            </span>
+            <span>Stepper 2
+                <strong id="angle2">0.0°</strong>
+            </span>
+            <button data-cmd="zero" class="secondary" style="height:48px; align-self:center;">Zero</button>
+        </div>
+        <div class="targets">
+            <div class="target-card">
+                <strong>Stepper 1 target</strong>
+                <input id="target1" type="number" step="0.1" placeholder="degrees" />
+                <button class="secondary" data-target="1">Go to angle</button>
+            </div>
+            <div class="target-card">
+                <strong>Stepper 2 target</strong>
+                <input id="target2" type="number" step="0.1" placeholder="degrees" />
+                <button class="secondary" data-target="2">Go to angle</button>
+            </div>
+        </div>
+        <div class="custom-command">
+            <input id="customInput" type="text" placeholder="Custom command (eg. speed 40)" />
+            <button id="sendCustom" class="secondary">Send</button>
+        </div>
+        <p id="status">Ready.</p>
+        <small>Arrow keys (↑ ↓ ← →) or WASD also work when this tab is focused.</small>
+    </div>
+
+    <script>
+        const keyMap = {
+            ArrowUp: "up",
+            ArrowDown: "down",
+            ArrowLeft: "left",
+            ArrowRight: "right",
+            KeyW: "up",
+            KeyS: "down",
+            KeyA: "left",
+            KeyD: "right",
+        };
+        const activeKeys = new Set();
+        const statusEl = document.getElementById("status");
+        const angle1El = document.getElementById("angle1");
+        const angle2El = document.getElementById("angle2");
+        const lastAngles = { 1: 0, 2: 0 };
+
+        async function sendCommand(cmd, text = "") {
+            if (!cmd && !text) {
+                return;
+            }
+            try {
+                const res = await fetch("/command", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ cmd, text }),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || "Unknown error");
+                }
+                statusEl.textContent = data.status || "Sent";
+            } catch (err) {
+                statusEl.textContent = `Error: ${err.message}`;
+            }
+        }
+
+        document.addEventListener("keydown", (event) => {
+            const cmd = keyMap[event.code];
+            if (cmd && !activeKeys.has(event.code)) {
+                activeKeys.add(event.code);
+                sendCommand(cmd);
+                event.preventDefault();
+            }
+        });
+
+        document.addEventListener("keyup", (event) => {
+            if (keyMap[event.code]) {
+                activeKeys.delete(event.code);
+                event.preventDefault();
+            }
+        });
+
+        document.querySelectorAll("button[data-cmd]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                sendCommand(btn.dataset.cmd);
+            });
+        });
+
+        document.getElementById("sendCustom").addEventListener("click", () => {
+            const value = document.getElementById("customInput").value.trim();
+            if (value) {
+                sendCommand("", value);
+                document.getElementById("customInput").value = "";
+            }
+        });
+
+        document.getElementById("customInput").addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+                document.getElementById("sendCustom").click();
+            }
+            event.stopPropagation();
+        });
+
+        document.querySelectorAll("button[data-target]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const motor = parseInt(btn.dataset.target, 10);
+                const input = document.getElementById(`target${motor}`);
+                const value = parseFloat(input.value);
+                if (Number.isNaN(value)) {
+                    statusEl.textContent = "Enter a valid angle first";
+                    return;
+                }
+                const current = lastAngles[motor];
+                const delta = value - current;
+                if (Math.abs(delta) < 0.05) {
+                    statusEl.textContent = "Already at requested angle";
+                    return;
+                }
+                const direction = delta >= 0 ? "f" : "r";
+                const command = `angle ${motor} ${direction} ${Math.abs(delta).toFixed(2)}`;
+                sendCommand("", command);
+            });
+        });
+
+        document.querySelectorAll(".target-card input").forEach((field) => {
+            field.addEventListener("keydown", (event) => {
+                if (event.key === "Enter") {
+                    field.parentElement.querySelector("button[data-target]").click();
+                }
+                event.stopPropagation();
+            });
+        });
+
+        async function refreshAngles() {
+            try {
+                const res = await fetch("/status");
+                if (!res.ok) {
+                    throw new Error("status fetch failed");
+                }
+                const data = await res.json();
+                angle1El.textContent = `${data.m1.toFixed(1)}°`;
+                angle2El.textContent = `${data.m2.toFixed(1)}°`;
+                lastAngles[1] = data.m1;
+                lastAngles[2] = data.m2;
+            } catch (err) {
+                // Keep previous values, optionally log to console
+                console.warn("status error", err);
+            }
+        }
+
+        setInterval(refreshAngles, 500);
+        refreshAngles();
+    </script>
+</body>
+</html>
