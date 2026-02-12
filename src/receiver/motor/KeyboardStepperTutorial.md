@@ -30,9 +30,9 @@ Thonny’s regular shell buffers keys, so use [MicroPython’s mpremote](https:/
   python -m pip install mpremote
   ```
 2. Upload `motorcontrols.py` (or rename it to `main.py`) plus `PicoRobotics.py` via Thonny’s **Files** pane, then stop Thonny’s backend (`Ctrl+F2`) so it releases the COM port.
-3. Open a terminal/PowerShell window and connect to the Pico (replace `COM5` with your port):
+3. Open a terminal/PowerShell window and connect to the Pico (replace `COM12` with your port):
   ```bash
-  mpremote connect COM5 repl
+  mpremote connect COM12 repl
   ```
   On macOS/Linux use `/dev/ttyACM0`, `/dev/ttyUSB0`, etc.
 4. When the MicroPython `>>>` prompt appears, soft reboot if desired (`Ctrl+D`) and start the controller:
@@ -104,9 +104,9 @@ If you would rather click buttons (or hold the browser’s arrow keys) instead o
   ```
 2. Ensure no other program is connected to the Pico’s serial port, then run:
   ```bash
-  python web_control_server.py --serial COM5 --http-port 8765
+  python web_control_server.py --serial COM12 --http-port 8765
   ```
-  Swap `COM5` for the correct port (`/dev/ttyACM0`, etc.).
+  Swap `COM12` for the correct port (`/dev/ttyACM0`, etc.).
 3. Open `http://localhost:8765` in a browser. You’ll see arrow buttons, a “release” button, a “zero” button, live degree readouts for both motors, **target angle inputs** (type an absolute degree for each stepper and press “Go to angle”), and a custom command input. Keep the tab focused to drive the steppers with the physical arrow keys or WASD.
 4. Start `main.py` on the Pico (`import main`) before launching the server. When you’re done, hit `Ctrl+C` in the server terminal to close the connection and return to mpremote/Thonny control.
 
