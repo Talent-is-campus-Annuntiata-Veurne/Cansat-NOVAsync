@@ -122,6 +122,103 @@
         label.slider input {
             width: 100%;
         }
+        .full-width {
+            grid-column: 1 / -1;
+        }
+        .angle-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 0.75rem;
+        }
+        .angle-chip {
+            background: #0f172a;
+            color: #fff;
+            border-radius: 18px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+        }
+        .angle-chip span {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            opacity: 0.8;
+        }
+        .angle-value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        .angle-voltage {
+            font-size: 0.9rem;
+            color: #cbd5f5;
+        }
+        .angle-status {
+            font-weight: 600;
+            color: #475569;
+        }
+        .calibration-card {
+            background: #fff;
+            border-radius: 18px;
+            padding: 1.25rem;
+            box-shadow: 0 25px 55px rgba(15, 23, 42, 0.12);
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+        }
+        .calibration-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #0f172a;
+        }
+        .progress-shell {
+            height: 12px;
+            background: #e2e8f0;
+            border-radius: 999px;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, #0ea5e9, #2563eb);
+            transition: width 150ms ease;
+        }
+        .calibration-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: flex-end;
+        }
+        .calibration-controls label {
+            display: flex;
+            flex-direction: column;
+            font-weight: 600;
+            font-size: 0.9rem;
+            gap: 0.35rem;
+        }
+        .calibration-controls select,
+        .calibration-controls input {
+            border-radius: 10px;
+            border: 1px solid #cbd5f5;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.95rem;
+            min-width: 130px;
+            background: #fff;
+        }
+        .calibration-controls input:disabled {
+            opacity: 0.45;
+        }
+        .calibration-controls button {
+            margin-left: auto;
+        }
+        .calibration-hint {
+            font-size: 0.85rem;
+            color: #475569;
+        }
     </style>
 </head>
 <body>
@@ -131,6 +228,13 @@
     </div>
 
     <div class="grid" id="motorGrid"></div>
+
+    <div class="card" id="anglePanel">
+        <h2>Axis Angles</h2>
+        <div class="angle-status" id="angleStatus">Waiting for data…</div>
+        <div class="angle-grid" id="angleList"></div>
+        <small id="angleUpdated">Updated --</small>
+    </div>
 
     <div class="card panel">
         <div class="actions">
@@ -149,12 +253,49 @@
         <small>Keyboard shortcuts: W/S (motor 1), I/K (motor 2), ↑/↓ (motor 3), →/← (motor 4).</small>
     </div>
 
+    <div class="calibration-card">
+        <h2>Calibration</h2>
+        <div class="calibration-meta">
+            <span id="calStatusText">Calibration: idle</span>
+            <span id="calUpdated"></span>
+        </div>
+        <div class="progress-shell">
+            <div class="progress-bar" id="calProgress"></div>
+        </div>
+        <div class="calibration-controls">
+            <label>
+                Elevation mode
+                <select id="elevCalMode">
+                    <option value="manual">Manual stop sweep</option>
+                    <option value="degrees">Degree-limited sweep</option>
+                </select>
+            </label>
+            <label>
+                Target degrees
+                <input type="number" id="elevCalDegrees" min="5" max="175" step="1" value="60" />
+            </label>
+            <button class="ghost" id="calStopBtn">Stop sweep</button>
+        </div>
+        <small class="calibration-hint">Set motor 2 to its lowest travel manually, pick how far to sweep, then press Calibrate on the elevation card.</small>
+        <small>Motor 1 always runs a full automatic sweep; the other motors reuse their existing behavior.</small>
+    </div>
+
     <script>
         const motors = [1, 2, 3, 4];
         const motorGrid = document.getElementById("motorGrid");
         const statusEl = document.getElementById("status");
         const incrementSlider = document.getElementById("incrementSlider");
         const incrementLabel = document.getElementById("incrementLabel");
+        const angleList = document.getElementById("angleList");
+        const angleStatus = document.getElementById("angleStatus");
+        const angleUpdated = document.getElementById("angleUpdated");
+        const calStatusText = document.getElementById("calStatusText");
+        const calProgress = document.getElementById("calProgress");
+        const calUpdated = document.getElementById("calUpdated");
+        const elevCalMode = document.getElementById("elevCalMode");
+        const elevCalDegrees = document.getElementById("elevCalDegrees");
+        const calStopBtn = document.getElementById("calStopBtn");
+        const angleCards = new Map();
         const keyMap = {
             KeyW: { motor: 1, dir: 1 },
             KeyS: { motor: 1, dir: -1 },
@@ -178,11 +319,29 @@
                     <button data-nudge="${motor}" data-dir="-1">Reverse</button>
                     <button class="ghost" data-release="${motor}">Release</button>
                     <button class="ghost" data-stop="${motor}">Stop</button>
+                    <button class="secondary full-width" data-calibrate="${motor}">Calibrate</button>
                 </div>`;
             motorGrid.appendChild(card);
         }
 
         motors.forEach(createCard);
+
+        function syncElevationInputs() {
+            if (!elevCalMode || !elevCalDegrees) {
+                return;
+            }
+            const manual = elevCalMode.value === "manual";
+            elevCalDegrees.disabled = manual;
+        }
+        if (elevCalMode) {
+            elevCalMode.addEventListener("change", syncElevationInputs);
+            syncElevationInputs();
+        }
+        if (calStopBtn) {
+            calStopBtn.addEventListener("click", () => {
+                sendCommand({ cmd: "calibration_stop" });
+            });
+        }
 
         async function sendCommand(payload) {
             try {
@@ -196,7 +355,7 @@
                     throw new Error(data.error || data.message || "Unknown error");
                 }
                 if (data.status) {
-                    updateThrottles(data.status);
+                    applyStatus(data.status);
                 }
                 statusEl.textContent = data.message || "OK";
             } catch (err) {
@@ -204,7 +363,13 @@
             }
         }
 
-        function updateThrottles(snapshot) {
+        function applyStatus(snapshot) {
+            updateThrottleCards(snapshot);
+            updateAngles(snapshot?.angles);
+            updateCalibration(snapshot?.calibration);
+        }
+
+        function updateThrottleCards(snapshot) {
             if (!snapshot || !snapshot.motors) {
                 return;
             }
@@ -219,9 +384,81 @@
                 }
             });
             if (typeof snapshot.increment === "number") {
-                incrementSlider.value = snapshot.increment.toFixed(2);
+                incrementSlider.value = snapshot.increment;
                 incrementLabel.textContent = snapshot.increment.toFixed(2);
             }
+        }
+
+        function ensureAngleCard(name) {
+            if (angleCards.has(name)) {
+                return angleCards.get(name);
+            }
+            const card = document.createElement("div");
+            card.className = "angle-chip";
+            card.innerHTML = `<span>${name}</span><div class="angle-value">--.-°</div><div class="angle-voltage"></div>`;
+            angleList.appendChild(card);
+            angleCards.set(name, card);
+            return card;
+        }
+
+        function updateAngles(payload) {
+            if (!payload || !payload.available) {
+                angleStatus.textContent = payload && payload.error ? `Angles unavailable: ${payload.error}` : "Angles unavailable";
+                angleUpdated.textContent = "";
+                angleList.innerHTML = "";
+                angleCards.clear();
+                return;
+            }
+            if (!payload.values || payload.values.length === 0) {
+                angleStatus.textContent = "No angle channels configured.";
+                return;
+            }
+            angleStatus.textContent = "";
+            const seen = new Set();
+            payload.values.forEach((entry) => {
+                const card = ensureAngleCard(entry.name);
+                card.querySelector(".angle-value").textContent = `${entry.degrees.toFixed(1)}°`;
+                if (typeof entry.voltage === "number") {
+                    card.querySelector(".angle-voltage").textContent = `${entry.voltage.toFixed(2)} V`;
+                }
+                seen.add(entry.name);
+            });
+            angleCards.forEach((card, name) => {
+                if (!seen.has(name)) {
+                    card.remove();
+                    angleCards.delete(name);
+                }
+            });
+            if (payload.updated) {
+                const timestamp = new Date(payload.updated * 1000);
+                angleUpdated.textContent = `Updated ${timestamp.toLocaleTimeString()}`;
+            }
+        }
+
+        function updateCalibration(payload) {
+            if (!payload) {
+                calStatusText.textContent = "Calibration: idle";
+                calProgress.style.width = "0%";
+                calUpdated.textContent = "";
+                setCalibrateButtonsDisabled(false);
+                return;
+            }
+            const stage = payload.stage || "idle";
+            const detail = payload.message ? ` – ${payload.message}` : "";
+            calStatusText.textContent = `Calibration: ${stage}${detail}`;
+            const pct = Math.round((payload.progress || 0) * 100);
+            calProgress.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+            if (payload.updated) {
+                const ts = new Date(payload.updated * 1000);
+                calUpdated.textContent = ts.toLocaleTimeString();
+            }
+            setCalibrateButtonsDisabled(Boolean(payload.running));
+        }
+
+        function setCalibrateButtonsDisabled(flag) {
+            document.querySelectorAll('[data-calibrate]').forEach((btn) => {
+                btn.disabled = flag;
+            });
         }
 
         document.addEventListener("click", (event) => {
@@ -239,6 +476,27 @@
                 sendCommand({ cmd: "stopall" });
             } else if (target.dataset.global === "release") {
                 sendCommand({ cmd: "release" });
+            } else if (target.dataset.calibrate) {
+                const motor = Number(target.dataset.calibrate);
+                const payload = { cmd: "calibrate", motor };
+                if (motor === 2 && elevCalMode) {
+                    payload.method = elevCalMode.value;
+                    if (payload.method === "degrees" && elevCalDegrees) {
+                        const value = Number(elevCalDegrees.value);
+                        const min = Number(elevCalDegrees.min || 0) || 0;
+                        const max = Number(elevCalDegrees.max || 0) || 0;
+                        if (!Number.isFinite(value) || value < Math.max(1, min)) {
+                            statusEl.textContent = "Enter a valid degree target for elevation calibration.";
+                            return;
+                        }
+                        if (max && value > max) {
+                            statusEl.textContent = `Degree target must be <= ${max}.`;
+                            return;
+                        }
+                        payload.degrees = value;
+                    }
+                }
+                sendCommand(payload);
             }
         });
 
@@ -288,7 +546,7 @@
                     throw new Error("status fetch failed");
                 }
                 const data = await res.json();
-                updateThrottles(data);
+                applyStatus(data);
             } catch (err) {
                 console.warn("status error", err);
             }
