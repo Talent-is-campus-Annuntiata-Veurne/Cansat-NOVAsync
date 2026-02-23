@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DC Motor Web Controller</title>
+    <style>
+        :root {
+            font-family: "Segoe UI", Arial, sans-serif;
+            color: #0b1728;
+            background: linear-gradient(135deg, #eef2ff, #e0f2f1);
+        }
+        body {
+            margin: 0;
+            padding: 2rem clamp(1rem, 4vw, 4rem);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            min-height: 100vh;
+        }
+        h1 {
+            margin: 0;
+            font-size: clamp(1.8rem, 5vw, 2.6rem);
+        }
+        p.description {
+            margin: 0;
+            max-width: 720px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.25rem;
+        }
+        .card {
+            background: #fff;
+            border-radius: 18px;
+            padding: 1.25rem;
+            box-shadow: 0 25px 55px rgba(15, 23, 42, 0.12);
+            display: flex;
+            flex-direction: column;
+            gap: 0.9rem;
+        }
+        .card h2 {
+            margin: 0;
+            font-size: 1.2rem;
+            letter-spacing: 0.03em;
+        }
+        .throttle {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        .badge {
+            padding: 0.2rem 0.7rem;
+            border-radius: 999px;
+            background: #e0e7ff;
+            font-size: 0.8rem;
+            align-self: flex-start;
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.5rem;
+        }
+        button {
+            border: none;
+            border-radius: 12px;
+            padding: 0.75rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            background: #2563eb;
+            color: #fff;
+            box-shadow: 0 10px 25px rgba(37, 99, 235, 0.25);
+            transition: transform 120ms ease, box-shadow 120ms ease;
+        }
+        button.secondary {
+            background: #0f172a;
+        }
+        button.ghost {
+            background: #f1f5f9;
+            color: #0f172a;
+            box-shadow: none;
+        }
+        button:active {
+            transform: translateY(1px);
+        }
+        .status-bar {
+            background: rgba(15, 23, 42, 0.85);
+            color: #fff;
+            padding: 0.9rem 1.1rem;
+            border-radius: 14px;
+            font-weight: 600;
+        }
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+        .custom-command {
+            display: flex;
+            gap: 0.6rem;
+        }
+        .custom-command input {
+            flex: 1;
+            border: none;
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+            box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.1);
+        }
+        .panel {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        label.slider {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            font-weight: 600;
+        }
+        label.slider input {
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <h1>DC Motor Web Controller</h1>
+        <p class="description">Run <code>web_dc_control_server.py</code> on the Raspberry Pi, then use this page (locally or via SSH port forwarding) to bump each motor's throttle, stop, or release it.</p>
+    </div>
+
+    <div class="grid" id="motorGrid"></div>
+
+    <div class="card panel">
+        <div class="actions">
+            <button class="ghost" data-global="stop">Stop all</button>
+            <button class="ghost" data-global="release">Release all</button>
+        </div>
+        <label class="slider">
+            Increment (<span id="incrementLabel">0.10</span>)
+            <input type="range" min="0.02" max="0.5" step="0.02" value="0.10" id="incrementSlider" />
+        </label>
+        <div class="custom-command">
+            <input id="customInput" type="text" placeholder="Custom command (e.g. set 1 0.5)" />
+            <button class="secondary" id="sendCustom">Send</button>
+        </div>
+        <div class="status-bar" id="status">Ready.</div>
+        <small>Keyboard shortcuts: W/S (motor 1), I/K (motor 2), ↑/↓ (motor 3), →/← (motor 4).</small>
+    </div>
+
+    <script>
+        const motors = [1, 2, 3, 4];
+        const motorGrid = document.getElementById("motorGrid");
+        const statusEl = document.getElementById("status");
+        const incrementSlider = document.getElementById("incrementSlider");
+        const incrementLabel = document.getElementById("incrementLabel");
+        const keyMap = {
+            KeyW: { motor: 1, dir: 1 },
+            KeyS: { motor: 1, dir: -1 },
+            KeyI: { motor: 2, dir: 1 },
+            KeyK: { motor: 2, dir: -1 },
+            ArrowUp: { motor: 3, dir: 1 },
+            ArrowDown: { motor: 3, dir: -1 },
+            ArrowRight: { motor: 4, dir: 1 },
+            ArrowLeft: { motor: 4, dir: -1 },
+        };
+        const activeKeys = new Set();
+
+        function createCard(motor) {
+            const card = document.createElement("div");
+            card.className = "card";
+            card.innerHTML = `
+                <div class="badge">Motor ${motor}</div>
+                <div class="throttle" id="throttle${motor}">+0.00</div>
+                <div class="controls">
+                    <button data-nudge="${motor}" data-dir="1">Forward</button>
+                    <button data-nudge="${motor}" data-dir="-1">Reverse</button>
+                    <button class="ghost" data-release="${motor}">Release</button>
+                    <button class="ghost" data-stop="${motor}">Stop</button>
+                </div>`;
+            motorGrid.appendChild(card);
+        }
+
+        motors.forEach(createCard);
+
+        async function sendCommand(payload) {
+            try {
+                const res = await fetch("/command", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || data.message || "Unknown error");
+                }
+                if (data.status) {
+                    updateThrottles(data.status);
+                }
+                statusEl.textContent = data.message || "OK";
+            } catch (err) {
+                statusEl.textContent = `Error: ${err.message}`;
+            }
+        }
+
+        function updateThrottles(snapshot) {
+            if (!snapshot || !snapshot.motors) {
+                return;
+            }
+            snapshot.motors.forEach((entry) => {
+                const el = document.getElementById(`throttle${entry.motor}`);
+                if (el) {
+                    if (entry.throttle === null || entry.throttle === undefined) {
+                        el.textContent = "REL";
+                    } else {
+                        el.textContent = `${entry.throttle >= 0 ? "+" : ""}${entry.throttle.toFixed(2)}`;
+                    }
+                }
+            });
+            if (typeof snapshot.increment === "number") {
+                incrementSlider.value = snapshot.increment.toFixed(2);
+                incrementLabel.textContent = snapshot.increment.toFixed(2);
+            }
+        }
+
+        document.addEventListener("click", (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) {
+                return;
+            }
+            if (target.dataset.nudge) {
+                sendCommand({ cmd: "nudge", motor: Number(target.dataset.nudge), direction: Number(target.dataset.dir) });
+            } else if (target.dataset.release) {
+                sendCommand({ cmd: "release", motor: Number(target.dataset.release) });
+            } else if (target.dataset.stop) {
+                sendCommand({ cmd: "stop", motor: Number(target.dataset.stop) });
+            } else if (target.dataset.global === "stop") {
+                sendCommand({ cmd: "stopall" });
+            } else if (target.dataset.global === "release") {
+                sendCommand({ cmd: "release" });
+            }
+        });
+
+        document.addEventListener("keydown", (event) => {
+            const binding = keyMap[event.code];
+            if (binding && !activeKeys.has(event.code)) {
+                activeKeys.add(event.code);
+                sendCommand({ cmd: "nudge", motor: binding.motor, direction: binding.dir });
+                event.preventDefault();
+            }
+        });
+
+        document.addEventListener("keyup", (event) => {
+            if (keyMap[event.code]) {
+                activeKeys.delete(event.code);
+                event.preventDefault();
+            }
+        });
+
+        incrementSlider.addEventListener("input", () => {
+            const value = Number(incrementSlider.value);
+            incrementLabel.textContent = value.toFixed(2);
+        });
+        incrementSlider.addEventListener("change", () => {
+            const value = Number(incrementSlider.value);
+            sendCommand({ cmd: "increment", amount: value });
+        });
+
+        document.getElementById("sendCustom").addEventListener("click", () => {
+            const value = document.getElementById("customInput").value.trim();
+            if (value) {
+                sendCommand({ text: value });
+                document.getElementById("customInput").value = "";
+            }
+        });
+        document.getElementById("customInput").addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+                document.getElementById("sendCustom").click();
+            }
+            event.stopPropagation();
+        });
+
+        async function refreshStatus() {
+            try {
+                const res = await fetch("/status");
+                if (!res.ok) {
+                    throw new Error("status fetch failed");
+                }
+                const data = await res.json();
+                updateThrottles(data);
+            } catch (err) {
+                console.warn("status error", err);
+            }
+        }
+
+        setInterval(refreshStatus, 700);
+        refreshStatus();
+    </script>
+</body>
+</html>
