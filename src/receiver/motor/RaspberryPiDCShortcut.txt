@@ -1,55 +1,53 @@
-Raspberry Pi DC Web Controller Shortcut
-======================================
+Super Simple Guide: One Click DC Motor Launcher
+==============================================
 
-Goal
-----
-Double-click one shortcut on the Raspberry Pi desktop to start the DC motor web server and automatically open the local web UI in Chromium.
+What you get
+------------
+Double-click an icon on the Pi desktop. It opens the motor server in a terminal and launches the web UI in Chromium.
 
-Prerequisites
--------------
-- Project directory: /home/pi/Cansat-NOVAsync (adjust paths if yours differs)
-- Python deps already installed on the Pi (`adafruit-circuitpython-motorkit` and `flask`)
-- Chromium installed (default on Raspberry Pi OS)
+Before you start
+----------------
+- Your project folder lives at /home/pi/Cansat-NOVAsync. If yours is somewhere else, swap that path in the steps below.
+- You've already installed the Python packages (`adafruit-circuitpython-motorkit` and `flask`).
+- Chromium is installed (it is by default on Raspberry Pi OS).
 
-Steps
------
-1. Create the launch script
-   a. Open a terminal on the Pi.
-   b. Run `nano ~/start_dc_control.sh`.
-   c. Paste the block:
-      #!/usr/bin/env bash
-      cd /home/pi/Cansat-NOVAsync || exit 1
-      lxterminal -t "DC Motor Server" -e bash -c "python3 src/receiver/motor/web_dc_control_server.py --host 0.0.0.0 --http-port 8765; read"
-      sleep 2
-      chromium-browser http://localhost:8765 &
-   d. Save (Ctrl+O, Enter) and exit (Ctrl+X).
-   e. Make it executable: `chmod +x ~/start_dc_control.sh`.
+Step 1 – Make a tiny script that does the work
+---------------------------------------------
+1. Open Terminal on the Pi.
+2. Type `nano ~/start_dc_control.sh` and press Enter.
+3. Paste these four lines exactly:
+   #!/usr/bin/env bash
+   cd /home/pi/Cansat-NOVAsync || exit 1
+   lxterminal -t "DC Motor Server" -e bash -c "python3 src/receiver/motor/web_dc_control_server.py --host 0.0.0.0 --http-port 8765; read"
+   sleep 2 && chromium-browser http://localhost:8765 &
+4. Press Ctrl+O, Enter to save, then Ctrl+X to quit Nano.
+5. Type `chmod +x ~/start_dc_control.sh` so the script can run.
 
-2. Create the desktop shortcut (.desktop launcher)
-   a. Run the heredoc to write the launcher:
-      cat <<'EOF' > ~/Desktop/DC-Control.desktop
-      [Desktop Entry]
-      Type=Application
-      Name=DC Motor Control
-      Exec=/home/pi/start_dc_control.sh
-      Icon=utilities-terminal
-      Terminal=false
-      EOF
-   b. Make the shortcut executable: `chmod +x ~/Desktop/DC-Control.desktop`.
+Step 2 – Drop a shortcut on the desktop
+---------------------------------------
+1. Still in the terminal, run:
+   cat <<'EOF' > ~/Desktop/DC-Control.desktop
+   [Desktop Entry]
+   Type=Application
+   Name=DC Motor Control
+   Exec=/home/pi/start_dc_control.sh
+   Icon=utilities-terminal
+   Terminal=false
+   EOF
+2. Make the shortcut clickable: `chmod +x ~/Desktop/DC-Control.desktop`.
 
-3. Use the shortcut
-   - Double-click "DC Motor Control" on the desktop.
-   - An LXTerminal opens and starts the server. Chromium launches pointing at http://localhost:8765 after a short delay.
-   - Close Chromium or Ctrl+C in the terminal to stop the session.
-
-4. Customization ideas
-   - Change the project path inside start_dc_control.sh if you move the repo.
-   - Swap `chromium-browser` for another browser (`firefox`, `midori`).
-   - If you want the server to listen only locally, change `--host 0.0.0.0` to `--host 127.0.0.1`.
-   - To keep Chromium from opening, comment out the last line in the script.
-
-Troubleshooting
+Step 3 – Use it
 ---------------
-- If double-click does nothing, ensure both files are executable (`ls -l ~/start_dc_control.sh` and `ls -l ~/Desktop/DC-Control.desktop`).
-- If the terminal reports missing modules, reinstall dependencies: `sudo pip3 install adafruit-circuitpython-motorkit flask`.
-- To edit the shortcut later, open it in a text editor (`nano ~/Desktop/DC-Control.desktop`).
+- Double-click the "DC Motor Control" icon on the desktop.
+- A terminal window pops up and starts the web server.
+- Two seconds later Chromium opens http://localhost:8765 with the buttons.
+- When you’re done, close Chromium and press Ctrl+C in the terminal.
+
+Help! Something broke
+---------------------
+- Double-click does nothing: run `ls -l ~/start_dc_control.sh ~/Desktop/DC-Control.desktop`. If you don’t see `-rwxr-xr-x`, re-run the `chmod` commands.
+- Terminal says modules are missing: run `sudo pip3 install adafruit-circuitpython-motorkit flask` once.
+- Chromium doesn’t open: maybe you removed it. Change the last line to use another browser, e.g. `firefox`.
+- Different project folder? Edit the script (`nano ~/start_dc_control.sh`) and change the `cd` line to your path.
+
+That’s it. One icon, motors ready.
