@@ -1,0 +1,55 @@
+Raspberry Pi DC Web Controller Shortcut
+======================================
+
+Goal
+----
+Double-click one shortcut on the Raspberry Pi desktop to start the DC motor web server and automatically open the local web UI in Chromium.
+
+Prerequisites
+-------------
+- Project directory: /home/pi/Cansat-NOVAsync (adjust paths if yours differs)
+- Python deps already installed on the Pi (`adafruit-circuitpython-motorkit` and `flask`)
+- Chromium installed (default on Raspberry Pi OS)
+
+Steps
+-----
+1. Create the launch script
+   a. Open a terminal on the Pi.
+   b. Run `nano ~/start_dc_control.sh`.
+   c. Paste the block:
+      #!/usr/bin/env bash
+      cd /home/pi/Cansat-NOVAsync || exit 1
+      lxterminal -t "DC Motor Server" -e bash -c "python3 src/receiver/motor/web_dc_control_server.py --host 0.0.0.0 --http-port 8765; read"
+      sleep 2
+      chromium-browser http://localhost:8765 &
+   d. Save (Ctrl+O, Enter) and exit (Ctrl+X).
+   e. Make it executable: `chmod +x ~/start_dc_control.sh`.
+
+2. Create the desktop shortcut (.desktop launcher)
+   a. Run the heredoc to write the launcher:
+      cat <<'EOF' > ~/Desktop/DC-Control.desktop
+      [Desktop Entry]
+      Type=Application
+      Name=DC Motor Control
+      Exec=/home/pi/start_dc_control.sh
+      Icon=utilities-terminal
+      Terminal=false
+      EOF
+   b. Make the shortcut executable: `chmod +x ~/Desktop/DC-Control.desktop`.
+
+3. Use the shortcut
+   - Double-click "DC Motor Control" on the desktop.
+   - An LXTerminal opens and starts the server. Chromium launches pointing at http://localhost:8765 after a short delay.
+   - Close Chromium or Ctrl+C in the terminal to stop the session.
+
+4. Customization ideas
+   - Change the project path inside start_dc_control.sh if you move the repo.
+   - Swap `chromium-browser` for another browser (`firefox`, `midori`).
+   - If you want the server to listen only locally, change `--host 0.0.0.0` to `--host 127.0.0.1`.
+   - To keep Chromium from opening, comment out the last line in the script.
+
+Troubleshooting
+---------------
+- If double-click does nothing, ensure both files are executable (`ls -l ~/start_dc_control.sh` and `ls -l ~/Desktop/DC-Control.desktop`).
+- If the terminal reports missing modules, reinstall dependencies: `sudo pip3 install adafruit-circuitpython-motorkit flask`.
+- To edit the shortcut later, open it in a text editor (`nano ~/Desktop/DC-Control.desktop`).
