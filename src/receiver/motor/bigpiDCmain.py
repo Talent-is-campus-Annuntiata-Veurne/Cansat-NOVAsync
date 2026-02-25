@@ -10,21 +10,21 @@ from contextlib import contextmanager
 from dc_control import DCControlState, MotorHatController, format_banner
 
 KEY_BINDS = {
-    "w": (1, 1),
-    "s": (1, -1),
-    "i": (2, 1),
-    "k": (2, -1),
+    "w": (1, 1),   # motor 1 forward (turn right)
+    "s": (1, -1),  # motor 1 reverse (turn left)
+    "i": (3, 1),   # motor 3 forward (tilt up)
+    "k": (3, -1),  # motor 3 reverse (tilt down)
 }
 
 ESCAPE_BINDS = {
-    "\x1b[A": (3, 1),  # Up arrow
-    "\x1b[B": (3, -1),  # Down arrow
-    "\x1b[C": (4, 1),  # Right arrow
-    "\x1b[D": (4, -1),  # Left arrow
+    "\x1b[A": (3, 1),  # Up arrow -> motor 3 forward
+    "\x1b[B": (3, -1),  # Down arrow -> motor 3 reverse
+    "\x1b[C": (1, 1),  # Right arrow -> motor 1 forward
+    "\x1b[D": (1, -1),  # Left arrow -> motor 1 reverse
     "\x1bOA": (3, 1),
     "\x1bOB": (3, -1),
-    "\x1bOC": (4, 1),
-    "\x1bOD": (4, -1),
+    "\x1bOC": (1, 1),
+    "\x1bOD": (1, -1),
 }
 
 
