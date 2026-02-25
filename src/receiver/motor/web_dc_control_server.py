@@ -26,10 +26,10 @@ app = Flask(__name__)
 CALIBRATION_FILE = Path(__file__).parent / "pot_calibration.json"
 MOTOR_TO_POT = {
     1: "azimuth",
-    2: "elevation",
+    3: "elevation",
 }
 AZIMUTH_MOTOR = 1
-ELEVATION_MOTOR = 2
+ELEVATION_MOTOR = 3
 CALIBRATION_SPEED = 0.22
 CALIBRATION_SAMPLE_INTERVAL = 0.05
 
@@ -86,6 +86,7 @@ def command():
         direction = payload.get("direction")
         method = (payload.get("method") or "auto").lower()
         degrees = payload.get("degrees")
+        value = payload.get("value")
 
         if CALIBRATION_STATE["running"] and cmd not in {"calibrate", "status", "calibration_stop"}:
             return jsonify({"error": "Calibration running; please wait"}), 409
@@ -128,6 +129,16 @@ def command():
             ok, msg = _start_calibration(int(motor), method=method, degrees=deg_value)
         elif cmd == "calibration_stop":
             ok, msg = _signal_calibration_stop()
+        elif cmd == "set_throttle":
+            if motor is None:
+                return jsonify({"error": "Motor is required"}), 400
+            if value is None:
+                return jsonify({"error": "Throttle value is required"}), 400
+            try:
+                target = float(value)
+            except Exception:
+                return jsonify({"error": "Throttle must be numeric"}), 400
+            ok, msg = STATE.set_motor_throttle(int(motor), target)
         else:
             return jsonify({"error": f"Unknown command: {cmd}"}), 400
 

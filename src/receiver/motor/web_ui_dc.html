@@ -61,6 +61,25 @@
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 0.5rem;
         }
+        .throttle-slider {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+        .slider-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #475569;
+        }
+        .slider-value {
+            font-weight: 700;
+            color: #0f172a;
+        }
+        .throttle-slider input[type="range"] {
+            width: 100%;
+        }
         button {
             border: none;
             border-radius: 12px;
@@ -250,7 +269,7 @@
             <button class="secondary" id="sendCustom">Send</button>
         </div>
         <div class="status-bar" id="status">Ready.</div>
-        <small>Keyboard shortcuts: W/S (motor 1), I/K (motor 2), ↑/↓ (motor 3), →/← (motor 4).</small>
+        <small>Keyboard shortcuts: ←/→ for Motor 1 (left/right), ↑/↓ for Motor 2 (up/down). W/S and I/K mirror the same motors.</small>
     </div>
 
     <div class="calibration-card">
@@ -276,12 +295,15 @@
             </label>
             <button class="ghost" id="calStopBtn">Stop sweep</button>
         </div>
-        <small class="calibration-hint">Set motor 2 to its lowest travel manually, pick how far to sweep, then press Calibrate on the elevation card.</small>
-        <small>Motor 1 always runs a full automatic sweep; the other motors reuse their existing behavior.</small>
+        <small class="calibration-hint">Set the up/down motor to its lowest travel manually, pick how far to sweep, then press Calibrate on that card.</small>
+        <small>Motor 1 (left/right) always runs a full automatic sweep; the up/down motor can use manual or degree sweeps.</small>
     </div>
 
     <script>
-        const motors = [1, 2, 3, 4];
+        const motorConfigs = [
+            { id: 1, label: "Motor 1 (Left/Right)" },
+            { id: 3, label: "Motor 2 (Up/Down)" },
+        ];
         const motorGrid = document.getElementById("motorGrid");
         const statusEl = document.getElementById("status");
         const incrementSlider = document.getElementById("incrementSlider");
@@ -297,23 +319,32 @@
         const calStopBtn = document.getElementById("calStopBtn");
         const angleCards = new Map();
         const keyMap = {
-            KeyW: { motor: 1, dir: 1 },
-            KeyS: { motor: 1, dir: -1 },
-            KeyI: { motor: 2, dir: 1 },
-            KeyK: { motor: 2, dir: -1 },
+            ArrowLeft: { motor: 1, dir: -1 },
+            ArrowRight: { motor: 1, dir: 1 },
             ArrowUp: { motor: 3, dir: 1 },
             ArrowDown: { motor: 3, dir: -1 },
-            ArrowRight: { motor: 4, dir: 1 },
-            ArrowLeft: { motor: 4, dir: -1 },
+            KeyW: { motor: 1, dir: 1 },
+            KeyS: { motor: 1, dir: -1 },
+            KeyI: { motor: 3, dir: 1 },
+            KeyK: { motor: 3, dir: -1 },
         };
         const activeKeys = new Set();
 
-        function createCard(motor) {
+        function createCard(config) {
+            const motor = config.id;
+            const badgeLabel = config.label || `Motor ${motor}`;
             const card = document.createElement("div");
             card.className = "card";
             card.innerHTML = `
-                <div class="badge">Motor ${motor}</div>
+                <div class="badge">${badgeLabel}</div>
                 <div class="throttle" id="throttle${motor}">+0.00</div>
+                <div class="throttle-slider">
+                    <div class="slider-meta">
+                        <span>Throttle</span>
+                        <span class="slider-value" id="sliderDisplay${motor}">+0.00</span>
+                    </div>
+                    <input type="range" min="-1" max="1" step="0.02" value="0" data-slider="${motor}" id="slider${motor}" />
+                </div>
                 <div class="controls">
                     <button data-nudge="${motor}" data-dir="1">Forward</button>
                     <button data-nudge="${motor}" data-dir="-1">Reverse</button>
@@ -324,7 +355,7 @@
             motorGrid.appendChild(card);
         }
 
-        motors.forEach(createCard);
+        motorConfigs.forEach(createCard);
 
         function syncElevationInputs() {
             if (!elevCalMode || !elevCalDegrees) {
@@ -369,6 +400,16 @@
             updateCalibration(snapshot?.calibration);
         }
 
+        function updateSliderDisplay(motor, value) {
+            const display = document.getElementById(`sliderDisplay${motor}`);
+            if (!display) {
+                return;
+            }
+            const numeric = Number(value) || 0;
+            const text = `${numeric >= 0 ? "+" : ""}${numeric.toFixed(2)}`;
+            display.textContent = text;
+        }
+
         function updateThrottleCards(snapshot) {
             if (!snapshot || !snapshot.motors) {
                 return;
@@ -381,6 +422,12 @@
                     } else {
                         el.textContent = `${entry.throttle >= 0 ? "+" : ""}${entry.throttle.toFixed(2)}`;
                     }
+                }
+                const slider = document.getElementById(`slider${entry.motor}`);
+                if (slider) {
+                    const sliderValue = entry.throttle ?? 0;
+                    slider.value = sliderValue;
+                    updateSliderDisplay(entry.motor, sliderValue);
                 }
             });
             if (typeof snapshot.increment === "number") {
@@ -479,7 +526,7 @@
             } else if (target.dataset.calibrate) {
                 const motor = Number(target.dataset.calibrate);
                 const payload = { cmd: "calibrate", motor };
-                if (motor === 2 && elevCalMode) {
+                if (motor === 3 && elevCalMode) {
                     payload.method = elevCalMode.value;
                     if (payload.method === "degrees" && elevCalDegrees) {
                         const value = Number(elevCalDegrees.value);
@@ -514,6 +561,28 @@
                 activeKeys.delete(event.code);
                 event.preventDefault();
             }
+        });
+
+        document.addEventListener("input", (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLInputElement) || !target.matches("[data-slider]")) {
+                return;
+            }
+            const motor = Number(target.dataset.slider);
+            updateSliderDisplay(motor, Number(target.value));
+        });
+
+        document.addEventListener("change", (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLInputElement) || !target.matches("[data-slider]")) {
+                return;
+            }
+            const motor = Number(target.dataset.slider);
+            const value = Number(target.value);
+            if (!Number.isFinite(motor) || !Number.isFinite(value)) {
+                return;
+            }
+            sendCommand({ cmd: "set_throttle", motor, value });
         });
 
         incrementSlider.addEventListener("input", () => {

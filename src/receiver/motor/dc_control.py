@@ -75,6 +75,11 @@ class DCControlState:
             return True, f"Motor {motor} stopped (brake)"
         return True, f"Motor {motor} throttle set to {target:+.2f}"
 
+    def set_motor_throttle(self, motor: int, target: float | None) -> Tuple[bool, str]:
+        if motor < 1 or motor > self.motor_count:
+            return False, f"Motor must be between 1 and {self.motor_count}"
+        return self._set_throttle(motor, target)
+
     def status_line(self) -> str:
         values: List[str] = []
         for motor in range(1, self.motor_count + 1):
