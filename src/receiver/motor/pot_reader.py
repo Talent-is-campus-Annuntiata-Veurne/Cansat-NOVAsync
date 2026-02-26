@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Dict, List, Sequence
@@ -60,6 +61,9 @@ class PotAngleReader:
         cs_pin=None,
         poll_interval: float = 0.25,
         calibration_path: str | Path | None = None,
+        samples_per_read: int = 12,
+        sample_delay: float = 0.005,
+        smooth_alpha: float = 0.4,
     ) -> None:
         self.configs: Sequence[PotChannelConfig] = configs or DEFAULT_POT_CHANNELS
         self.poll_interval = poll_interval
@@ -68,6 +72,9 @@ class PotAngleReader:
         self._channels: Dict[str, AnalogIn] = {}
         self._config_map = {cfg.name: cfg for cfg in self.configs}
         self.calibration_path = Path(calibration_path) if calibration_path else None
+        self.samples_per_read = max(1, int(samples_per_read))
+        self.sample_delay = max(0.0, float(sample_delay))
+        self.smooth_alpha = min(max(float(smooth_alpha), 0.0), 1.0)
 
         if self.calibration_path and self.calibration_path.exists():
             self._load_calibration_file()
@@ -100,7 +107,7 @@ class PotAngleReader:
             channel = self._channels.get(cfg.name)
             if channel is None:
                 continue
-            raw_value = channel.value
+            raw_value = self._filtered_value(channel)
             voltage = channel.voltage
             degrees = self._raw_to_degrees(raw_value, cfg)
             readings.append(
@@ -180,7 +187,36 @@ class PotAngleReader:
         channel = self._channels.get(name)
         if channel is None:
             raise ValueError(f"Unknown potentiometer '{name}'")
-        return channel.value
+        return self._filtered_value(channel)
+
+    def sample_raw(self, name: str, count: int = 8, delay: float | None = None) -> List[int]:
+        if not self.available:
+            return []
+        channel = self._channels.get(name)
+        if channel is None:
+            raise ValueError(f"Unknown potentiometer '{name}'")
+        delay = self.sample_delay if delay is None else max(0.0, float(delay))
+        total = max(1, int(count))
+        samples: List[int] = []
+        for _ in range(total):
+            samples.append(channel.value)
+            if delay:
+                time.sleep(delay)
+        return samples
+
+    def _filtered_value(self, channel: AnalogIn, *, samples_override: int | None = None) -> int:
+        samples = max(1, samples_override or self.samples_per_read)
+        if samples == 1 or self.smooth_alpha <= 0.0:
+            return channel.value
+        value = float(channel.value)
+        alpha = self.smooth_alpha
+        delay = self.sample_delay
+        for _ in range(samples - 1):
+            if delay:
+                time.sleep(delay)
+            next_value = channel.value
+            value = value * (1.0 - alpha) + next_value * alpha
+        return int(round(value))
 
 
 __all__ = ["PotAngleReader", "PotChannelConfig", "DEFAULT_POT_CHANNELS"]
