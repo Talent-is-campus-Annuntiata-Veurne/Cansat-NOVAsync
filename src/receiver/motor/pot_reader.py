@@ -61,7 +61,7 @@ class PotAngleReader:
         cs_pin=None,
         poll_interval: float = 0.25,
         calibration_path: str | Path | None = None,
-        samples_per_read: int = 12,
+        smooth_iterations: int = 12,
         sample_delay: float = 0.005,
         smooth_alpha: float = 0.4,
     ) -> None:
@@ -72,7 +72,7 @@ class PotAngleReader:
         self._channels: Dict[str, AnalogIn] = {}
         self._config_map = {cfg.name: cfg for cfg in self.configs}
         self.calibration_path = Path(calibration_path) if calibration_path else None
-        self.samples_per_read = max(1, int(samples_per_read))
+        self.smooth_iterations = max(0, int(smooth_iterations))
         self.sample_delay = max(0.0, float(sample_delay))
         self.smooth_alpha = min(max(float(smooth_alpha), 0.0), 1.0)
 
@@ -204,18 +204,17 @@ class PotAngleReader:
                 time.sleep(delay)
         return samples
 
-    def _filtered_value(self, channel: AnalogIn, *, samples_override: int | None = None) -> int:
-        samples = max(1, samples_override or self.samples_per_read)
-        if samples == 1 or self.smooth_alpha <= 0.0:
+    def _filtered_value(self, channel: AnalogIn) -> int:
+        if self.smooth_iterations <= 0 or self.smooth_alpha <= 0.0:
             return channel.value
         value = float(channel.value)
         alpha = self.smooth_alpha
         delay = self.sample_delay
-        for _ in range(samples - 1):
+        for _ in range(self.smooth_iterations):
             if delay:
                 time.sleep(delay)
-            next_value = channel.value
-            value = value * (1.0 - alpha) + next_value * alpha
+            sample = channel.value
+            value = value * (1.0 - alpha) + sample * alpha
         return int(round(value))
 
 
