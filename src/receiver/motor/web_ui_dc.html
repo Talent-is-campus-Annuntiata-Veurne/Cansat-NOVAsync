@@ -61,6 +61,44 @@
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 0.5rem;
         }
+        .intent-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 0.2rem;
+        }
+        .intent-arrow {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: #94a3b8;
+            background: #e2e8f0;
+            box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+            transition: all 120ms ease;
+            user-select: none;
+        }
+        .intent-arrow.active-pos {
+            color: #064e3b;
+            background: #86efac;
+            box-shadow: 0 8px 18px rgba(34, 197, 94, 0.3);
+        }
+        .intent-arrow.active-neg {
+            color: #7f1d1d;
+            background: #fca5a5;
+            box-shadow: 0 8px 18px rgba(239, 68, 68, 0.3);
+        }
+        .intent-label {
+            text-align: center;
+            font-size: 0.82rem;
+            color: #475569;
+            font-weight: 700;
+        }
         .throttle-slider {
             display: flex;
             flex-direction: column;
@@ -186,6 +224,71 @@
             flex-direction: column;
             gap: 0.8rem;
         }
+        .raw-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 0.75rem;
+        }
+        .raw-chip {
+            background: #fff7ed;
+            border-radius: 18px;
+            padding: 1rem;
+            box-shadow: inset 0 0 0 1px rgba(251, 146, 60, 0.35);
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+        .raw-chip span {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #ea580c;
+        }
+        .raw-value {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: #9a3412;
+        }
+        .raw-ohms {
+            font-size: 0.9rem;
+            color: #92400e;
+        }
+        .raw-status {
+            font-weight: 600;
+            color: #b45309;
+        }
+        .telemetry-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+        }
+        .telemetry-card {
+            background: #f8fafc;
+            border-radius: 14px;
+            padding: 0.9rem;
+            box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.12);
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+        .telemetry-card h3 {
+            margin: 0;
+            font-size: 0.95rem;
+            color: #0f172a;
+        }
+        .telemetry-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            color: #334155;
+        }
+        .map-frame {
+            width: 100%;
+            min-height: 220px;
+            border: 0;
+            border-radius: 14px;
+            background: #e2e8f0;
+        }
         .calibration-meta {
             display: flex;
             justify-content: space-between;
@@ -238,6 +341,98 @@
             font-size: 0.85rem;
             color: #475569;
         }
+        .auto-preview {
+            background: #ecfeff;
+            border-radius: 14px;
+            padding: 0.8rem;
+            box-shadow: inset 0 0 0 1px rgba(14, 116, 144, 0.18);
+            display: grid;
+            gap: 0.6rem;
+        }
+        .auto-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            align-items: center;
+        }
+        .auto-controls input {
+            border-radius: 10px;
+            border: 1px solid #bae6fd;
+            padding: 0.45rem 0.6rem;
+            width: 130px;
+            background: #fff;
+        }
+        .auto-controls .base-action {
+            min-width: 120px;
+        }
+        .auto-text {
+            font-size: 0.9rem;
+            color: #0f172a;
+            font-weight: 600;
+        }
+        .guidance-compass {
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 0.65rem 0.8rem;
+            box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.12);
+        }
+        .compass-face {
+            width: 84px;
+            height: 84px;
+            border-radius: 999px;
+            position: relative;
+            background: radial-gradient(circle at 50% 50%, #ffffff 0%, #e2e8f0 100%);
+            box-shadow: inset 0 0 0 2px rgba(15, 23, 42, 0.15);
+            flex: 0 0 auto;
+        }
+        .compass-mark {
+            position: absolute;
+            font-size: 0.65rem;
+            font-weight: 800;
+            color: #334155;
+        }
+        .mark-n { top: 4px; left: 50%; transform: translateX(-50%); }
+        .mark-e { right: 6px; top: 50%; transform: translateY(-50%); }
+        .mark-s { bottom: 4px; left: 50%; transform: translateX(-50%); }
+        .mark-w { left: 6px; top: 50%; transform: translateY(-50%); }
+        .compass-center {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: #0f172a;
+            transform: translate(-50%, -50%);
+            z-index: 4;
+        }
+        .needle {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 2px;
+            height: 34px;
+            transform-origin: 50% 100%;
+            border-radius: 999px;
+            z-index: 3;
+        }
+        .needle-target {
+            background: #ef4444;
+        }
+        .needle-current {
+            background: #2563eb;
+            opacity: 0.95;
+        }
+        .compass-readout {
+            display: grid;
+            gap: 0.15rem;
+            font-size: 0.85rem;
+            color: #1e293b;
+            font-weight: 700;
+        }
     </style>
 </head>
 <body>
@@ -255,10 +450,83 @@
         <small id="angleUpdated">Updated --</small>
     </div>
 
+    <div class="card" id="rawPanel">
+        <h2>Pot Raw Values</h2>
+        <div class="raw-status" id="rawStatus">Waiting for Pico potentiometers…</div>
+        <div class="raw-grid" id="rawList"></div>
+        <small id="rawUpdated">Updated --</small>
+    </div>
+
+    <div class="card" id="telemetryPanel">
+        <h2>Receiver Telemetry</h2>
+        <div class="angle-status" id="telemetryStatus">Waiting for receiver telemetry…</div>
+        <div class="telemetry-grid">
+            <div class="telemetry-card">
+                <h3>Location</h3>
+                <div class="telemetry-row"><span>Latitude</span><strong id="telLat">--</strong></div>
+                <div class="telemetry-row"><span>Longitude</span><strong id="telLon">--</strong></div>
+                <div class="telemetry-row"><span>Altitude (m)</span><strong id="telAlt">--</strong></div>
+                <div class="telemetry-row"><span>GPS time</span><strong id="telGpsTime">--</strong></div>
+            </div>
+            <div class="telemetry-card">
+                <h3>Environment</h3>
+                <div class="telemetry-row"><span>Temp (C)</span><strong id="telTemp">--</strong></div>
+                <div class="telemetry-row"><span>Pressure (hPa)</span><strong id="telPressure">--</strong></div>
+                <div class="telemetry-row"><span>Humidity (%)</span><strong id="telHumidity">--</strong></div>
+                <div class="telemetry-row"><span>Baro alt</span><strong id="telBaro">--</strong></div>
+            </div>
+            <div class="telemetry-card">
+                <h3>Link</h3>
+                <div class="telemetry-row"><span>Counter</span><strong id="telCounter">--</strong></div>
+                <div class="telemetry-row"><span>RX RSSI (dBm)</span><strong id="telRssi">--</strong></div>
+                <div class="telemetry-row"><span>Fix</span><strong id="telFix">--</strong></div>
+            </div>
+        </div>
+        <iframe id="gpsMap" class="map-frame" title="GPS map" loading="lazy"></iframe>
+        <small id="telemetryUpdated">Updated --</small>
+    </div>
+
     <div class="card panel">
         <div class="actions">
+            <button class="ghost" id="previewToggle">Preview-only: OFF</button>
+            <button class="ghost" id="autoPreviewToggle">Auto-track: OFF</button>
             <button class="ghost" data-global="stop">Stop all</button>
             <button class="ghost" data-global="release">Release all</button>
+        </div>
+        <div class="auto-preview">
+            <div class="auto-controls">
+                <label>
+                    Base lat
+                    <input type="number" step="0.000001" id="baseLatInput" placeholder="51.000000" />
+                </label>
+                <label>
+                    Base lon
+                    <input type="number" step="0.000001" id="baseLonInput" placeholder="3.500000" />
+                </label>
+                <label>
+                    Base alt (m)
+                    <input type="number" step="0.1" id="baseAltInput" placeholder="0" />
+                </label>
+                <button class="ghost base-action" id="sendBaseBtn" type="button">Send base</button>
+                <button class="ghost base-action" id="clearBaseBtn" type="button">Clear base</button>
+            </div>
+            <div class="auto-text" id="autoPreviewStatus">Auto tracking idle. Set base and send to Pico.</div>
+            <div class="guidance-compass">
+                <div class="compass-face" id="guidanceCompassFace">
+                    <span class="compass-mark mark-n">N</span>
+                    <span class="compass-mark mark-e">E</span>
+                    <span class="compass-mark mark-s">S</span>
+                    <span class="compass-mark mark-w">W</span>
+                    <div class="needle needle-target" id="targetNeedle"></div>
+                    <div class="needle needle-current" id="currentNeedle"></div>
+                    <div class="compass-center"></div>
+                </div>
+                <div class="compass-readout" id="guidanceText">
+                    <div>Wanted heading: --</div>
+                    <div>Antenna heading: --</div>
+                    <div>Wanted turn: --</div>
+                </div>
+            </div>
         </div>
         <label class="slider">
             Increment (<span id="incrementLabel">0.10</span>)
@@ -302,7 +570,7 @@
     <script>
         const motorConfigs = [
             { id: 1, label: "Motor 1 (Left/Right)" },
-            { id: 3, label: "Motor 2 (Up/Down)" },
+            { id: 2, label: "Motor 2 (Up/Down)" },
         ];
         const motorGrid = document.getElementById("motorGrid");
         const statusEl = document.getElementById("status");
@@ -311,22 +579,50 @@
         const angleList = document.getElementById("angleList");
         const angleStatus = document.getElementById("angleStatus");
         const angleUpdated = document.getElementById("angleUpdated");
+        const rawList = document.getElementById("rawList");
+        const rawStatus = document.getElementById("rawStatus");
+        const rawUpdated = document.getElementById("rawUpdated");
+        const telemetryStatus = document.getElementById("telemetryStatus");
+        const telemetryUpdated = document.getElementById("telemetryUpdated");
+        const gpsMap = document.getElementById("gpsMap");
         const calStatusText = document.getElementById("calStatusText");
         const calProgress = document.getElementById("calProgress");
         const calUpdated = document.getElementById("calUpdated");
         const elevCalMode = document.getElementById("elevCalMode");
         const elevCalDegrees = document.getElementById("elevCalDegrees");
         const calStopBtn = document.getElementById("calStopBtn");
+        const previewToggle = document.getElementById("previewToggle");
+        const autoPreviewToggle = document.getElementById("autoPreviewToggle");
+        const autoPreviewStatus = document.getElementById("autoPreviewStatus");
+        const baseLatInput = document.getElementById("baseLatInput");
+        const baseLonInput = document.getElementById("baseLonInput");
+        const baseAltInput = document.getElementById("baseAltInput");
+        const sendBaseBtn = document.getElementById("sendBaseBtn");
+        const clearBaseBtn = document.getElementById("clearBaseBtn");
+        const targetNeedle = document.getElementById("targetNeedle");
+        const currentNeedle = document.getElementById("currentNeedle");
+        const guidanceText = document.getElementById("guidanceText");
         const angleCards = new Map();
+        const rawCards = new Map();
+        const uiIntent = new Map();
+        let previewOnly = false;
+        let autoPreviewEnabled = false;
+        let latestSnapshot = null;
+        let lockEventSeqSeen = 0;
+        let manualLockUntilMs = 0;
+        const lockChime = new Audio("/soundeffects/sfx_correctchime.mp3");
+        lockChime.preload = "auto";
+        const AUTO_AZ_DEADBAND_DEG = 4;
+        const AUTO_EL_DEADBAND_DEG = 3;
         const keyMap = {
             ArrowLeft: { motor: 1, dir: -1 },
             ArrowRight: { motor: 1, dir: 1 },
-            ArrowUp: { motor: 3, dir: 1 },
-            ArrowDown: { motor: 3, dir: -1 },
+            ArrowUp: { motor: 2, dir: 1 },
+            ArrowDown: { motor: 2, dir: -1 },
             KeyW: { motor: 1, dir: 1 },
             KeyS: { motor: 1, dir: -1 },
-            KeyI: { motor: 3, dir: 1 },
-            KeyK: { motor: 3, dir: -1 },
+            KeyI: { motor: 2, dir: 1 },
+            KeyK: { motor: 2, dir: -1 },
         };
         const activeKeys = new Set();
 
@@ -338,6 +634,11 @@
             card.innerHTML = `
                 <div class="badge">${badgeLabel}</div>
                 <div class="throttle" id="throttle${motor}">+0.00</div>
+                <div class="intent-wrap">
+                    <span class="intent-arrow" id="intentNeg${motor}">${motor === 1 ? "\u2190" : "\u2193"}</span>
+                    <span class="intent-arrow" id="intentPos${motor}">${motor === 1 ? "\u2192" : "\u2191"}</span>
+                </div>
+                <div class="intent-label" id="intentLabel${motor}">Intent: idle</div>
                 <div class="throttle-slider">
                     <div class="slider-meta">
                         <span>Throttle (0-1)</span>
@@ -357,6 +658,7 @@
             if (slider) {
                 updateSliderDisplay(motor, slider.value);
             }
+            setIntent(motor, 0);
         }
 
         motorConfigs.forEach(createCard);
@@ -379,6 +681,11 @@
         }
 
         async function sendCommand(payload) {
+            if (previewOnly) {
+                const label = payload?.cmd || (payload?.text ? "custom" : "command");
+                statusEl.textContent = `Preview-only active: ${label} shown in UI, not sent.`;
+                return;
+            }
             try {
                 const res = await fetch("/command", {
                     method: "POST",
@@ -399,9 +706,324 @@
         }
 
         function applyStatus(snapshot) {
+            latestSnapshot = snapshot;
             updateThrottleCards(snapshot);
             updateAngles(snapshot?.angles);
+            updateRaw(snapshot?.raw);
+            updateTelemetry(snapshot?.telemetry);
             updateCalibration(snapshot?.calibration);
+            updateAutoStatus(snapshot?.auto);
+            updateLockState(snapshot?.lock);
+            updateGuidanceCompass(snapshot);
+        }
+
+        function updateLockState(payload) {
+            if (!payload) {
+                manualLockUntilMs = 0;
+                return;
+            }
+            const eventSeq = Number(payload.event_seq || 0);
+            const remaining = Number(payload.remaining || 0);
+            if (Number.isFinite(remaining) && remaining > 0) {
+                manualLockUntilMs = Date.now() + (remaining * 1000);
+            } else {
+                manualLockUntilMs = 0;
+            }
+            if (eventSeq > lockEventSeqSeen) {
+                lockEventSeqSeen = eventSeq;
+                try {
+                    lockChime.currentTime = 0;
+                    void lockChime.play();
+                } catch (err) {
+                    console.warn("lock chime play failed", err);
+                }
+                const remaining = Math.max(0, (manualLockUntilMs - Date.now()) / 1000);
+                statusEl.textContent = `GPS lock acquired. Manual override blocked for ${remaining.toFixed(1)}s.`;
+            }
+        }
+
+        function manualOverrideBlocked() {
+            return Date.now() < manualLockUntilMs;
+        }
+
+        function manualLockMessage() {
+            const remaining = Math.max(0, (manualLockUntilMs - Date.now()) / 1000);
+            return `Manual override temporarily locked for ${remaining.toFixed(1)}s after GPS lock.`;
+        }
+
+        function updateAutoStatus(payload) {
+            if (!payload) {
+                autoPreviewEnabled = false;
+                if (autoPreviewToggle) {
+                    autoPreviewToggle.textContent = "Auto-track: OFF";
+                }
+                autoPreviewStatus.textContent = "Auto tracking unavailable.";
+                return;
+            }
+            autoPreviewEnabled = Boolean(payload.enabled);
+            if (autoPreviewToggle) {
+                autoPreviewToggle.textContent = `Auto-track: ${autoPreviewEnabled ? "ON" : "OFF"}`;
+            }
+            const state = payload.state || (autoPreviewEnabled ? "running" : "off");
+            const delta = typeof payload.delta === "number" && Number.isFinite(payload.delta)
+                ? payload.delta.toFixed(2)
+                : "--";
+            const motor = Number(payload.motor || 0);
+            const dir = Number(payload.dir || 0);
+            const m1Dir = motor === 1 ? dir : 0;
+            const m2Dir = motor === 2 ? dir : 0;
+            setIntent(1, m1Dir);
+            setIntent(2, m2Dir);
+            autoPreviewStatus.textContent = `Auto ${autoPreviewEnabled ? "ON" : "OFF"} | state=${state} | err=${delta}`;
+        }
+
+        function deg2rad(deg) {
+            return (deg * Math.PI) / 180;
+        }
+
+        function rad2deg(rad) {
+            return (rad * 180) / Math.PI;
+        }
+
+        function normalize360(angle) {
+            let v = angle % 360;
+            if (v < 0) {
+                v += 360;
+            }
+            return v;
+        }
+
+        function shortestAngleDiff(targetDeg, currentDeg) {
+            let diff = normalize360(targetDeg) - normalize360(currentDeg);
+            if (diff > 180) {
+                diff -= 360;
+            }
+            if (diff < -180) {
+                diff += 360;
+            }
+            return diff;
+        }
+
+        function haversineMeters(lat1, lon1, lat2, lon2) {
+            const R = 6371000;
+            const p1 = deg2rad(lat1);
+            const p2 = deg2rad(lat2);
+            const dphi = deg2rad(lat2 - lat1);
+            const dlambda = deg2rad(lon2 - lon1);
+            const a = Math.sin(dphi / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dlambda / 2) ** 2;
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        function bearingDegrees(lat1, lon1, lat2, lon2) {
+            const p1 = deg2rad(lat1);
+            const p2 = deg2rad(lat2);
+            const dlambda = deg2rad(lon2 - lon1);
+            const y = Math.sin(dlambda) * Math.cos(p2);
+            const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dlambda);
+            return normalize360(rad2deg(Math.atan2(y, x)));
+        }
+
+        function getAngleFromSnapshot(snapshot, name) {
+            const values = snapshot?.angles?.values;
+            if (!Array.isArray(values)) {
+                return null;
+            }
+            const found = values.find((entry) => String(entry?.name || "").toLowerCase() === name);
+            if (!found || typeof found.degrees !== "number" || !Number.isFinite(found.degrees)) {
+                return null;
+            }
+            return found.degrees;
+        }
+
+        function parseInputNumber(inputEl, fallback = null) {
+            if (!inputEl) {
+                return fallback;
+            }
+            const v = Number(inputEl.value);
+            if (!Number.isFinite(v)) {
+                return fallback;
+            }
+            return v;
+        }
+
+        function readBasePayload() {
+            const lat = parseInputNumber(baseLatInput, null);
+            const lon = parseInputNumber(baseLonInput, null);
+            const alt = parseInputNumber(baseAltInput, 0);
+            if (lat === null || lon === null) {
+                return null;
+            }
+            return { base_lat: lat, base_lon: lon, base_alt: alt };
+        }
+
+        function buildAutoBaseCommand() {
+            const base = readBasePayload();
+            if (!base) {
+                return null;
+            }
+            return `auto base ${base.base_lat.toFixed(6)} ${base.base_lon.toFixed(6)} ${base.base_alt.toFixed(1)}`;
+        }
+
+        function applyAutoTrackPreview(snapshot) {
+            const tel = snapshot?.telemetry?.latest;
+            const hasFix = tel && Number(tel.fix) === 1;
+            const azNow = getAngleFromSnapshot(snapshot, "azimuth");
+            const elNow = getAngleFromSnapshot(snapshot, "elevation");
+
+            if (!hasFix || typeof tel.lat !== "number" || typeof tel.lon !== "number") {
+                setIntent(1, 0);
+                setIntent(2, 0);
+                autoPreviewStatus.textContent = "Auto preview waiting for GPS fix telemetry.";
+                return;
+            }
+            if (azNow === null || elNow === null) {
+                setIntent(1, 0);
+                setIntent(2, 0);
+                autoPreviewStatus.textContent = "Auto preview waiting for azimuth/elevation angle channels.";
+                return;
+            }
+
+            const baseLat = parseInputNumber(baseLatInput, null);
+            const baseLon = parseInputNumber(baseLonInput, null);
+            const baseAlt = parseInputNumber(baseAltInput, 0);
+            if (baseLat === null || baseLon === null) {
+                setIntent(1, 0);
+                setIntent(2, 0);
+                autoPreviewStatus.textContent = "Enter base lat/lon to compute automatic direction intent.";
+                return;
+            }
+
+            const targetAz = bearingDegrees(baseLat, baseLon, tel.lat, tel.lon);
+            const horizontalDist = haversineMeters(baseLat, baseLon, tel.lat, tel.lon);
+            const targetAlt = typeof tel.alt === "number" && Number.isFinite(tel.alt) ? tel.alt : baseAlt;
+            const targetEl = rad2deg(Math.atan2(targetAlt - baseAlt, Math.max(1.0, horizontalDist)));
+
+            const azErr = shortestAngleDiff(targetAz, azNow);
+            const elErr = targetEl - elNow;
+            const m1Dir = Math.abs(azErr) <= AUTO_AZ_DEADBAND_DEG ? 0 : (azErr > 0 ? 1 : -1);
+            const m2Dir = Math.abs(elErr) <= AUTO_EL_DEADBAND_DEG ? 0 : (elErr > 0 ? 1 : -1);
+
+            setIntent(1, m1Dir);
+            setIntent(2, m2Dir);
+
+            const m1Text = m1Dir > 0 ? "right" : (m1Dir < 0 ? "left" : "hold");
+            const m2Text = m2Dir > 0 ? "up" : (m2Dir < 0 ? "down" : "hold");
+            autoPreviewStatus.textContent = `Auto preview: M1 ${m1Text} (err ${azErr.toFixed(1)}°), M2 ${m2Text} (err ${elErr.toFixed(1)}°)`;
+        }
+
+        function setNeedleHeading(needleEl, headingDeg) {
+            if (!needleEl) {
+                return;
+            }
+            if (!(typeof headingDeg === "number" && Number.isFinite(headingDeg))) {
+                needleEl.style.opacity = "0.2";
+                needleEl.style.transform = "translate(-50%, -100%) rotate(0deg)";
+                return;
+            }
+            needleEl.style.opacity = "1";
+            needleEl.style.transform = `translate(-50%, -100%) rotate(${normalize360(headingDeg)}deg)`;
+        }
+
+        function updateGuidanceCompass(snapshot) {
+            const tel = snapshot?.telemetry?.latest;
+            const base = readBasePayload();
+            const azNow = getAngleFromSnapshot(snapshot, "azimuth");
+
+            if (!guidanceText) {
+                return;
+            }
+
+            if (!base) {
+                setNeedleHeading(targetNeedle, null);
+                setNeedleHeading(currentNeedle, azNow);
+                guidanceText.innerHTML = "<div>Wanted heading: --</div><div>Antenna heading: --</div><div>Wanted turn: enter base lat/lon</div>";
+                return;
+            }
+
+            const hasFix = tel && Number(tel.fix) === 1 && typeof tel.lat === "number" && typeof tel.lon === "number";
+            if (!hasFix) {
+                setNeedleHeading(targetNeedle, null);
+                setNeedleHeading(currentNeedle, azNow);
+                guidanceText.innerHTML = "<div>Wanted heading: --</div><div>Antenna heading: --</div><div>Wanted turn: waiting GPS fix</div>";
+                return;
+            }
+
+            const wantedHeading = bearingDegrees(base.base_lat, base.base_lon, tel.lat, tel.lon);
+            const antennaHeading = typeof azNow === "number" && Number.isFinite(azNow) ? normalize360(azNow) : null;
+            const err = antennaHeading === null ? null : shortestAngleDiff(wantedHeading, antennaHeading);
+
+            let turnText = "hold";
+            if (typeof err === "number" && Number.isFinite(err)) {
+                if (Math.abs(err) > AUTO_AZ_DEADBAND_DEG) {
+                    turnText = err > 0 ? "right" : "left";
+                }
+            } else {
+                turnText = "waiting azimuth";
+            }
+
+            setNeedleHeading(targetNeedle, wantedHeading);
+            setNeedleHeading(currentNeedle, antennaHeading);
+            guidanceText.innerHTML = `
+                <div>Wanted heading: ${wantedHeading.toFixed(1)}°</div>
+                <div>Antenna heading: ${antennaHeading === null ? "--" : antennaHeading.toFixed(1) + "°"}</div>
+                <div>Wanted turn: ${turnText}${typeof err === "number" && Number.isFinite(err) ? ` (${err.toFixed(1)}°)` : ""}</div>
+            `;
+        }
+
+        function fmtNumber(value, digits = 2) {
+            return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "--";
+        }
+
+        function setText(id, value) {
+            const el = document.getElementById(id);
+            if (!el) {
+                return;
+            }
+            el.textContent = value;
+        }
+
+        function updateMap(lat, lon) {
+            if (!gpsMap) {
+                return;
+            }
+            if (!(typeof lat === "number" && Number.isFinite(lat) && typeof lon === "number" && Number.isFinite(lon))) {
+                gpsMap.removeAttribute("src");
+                return;
+            }
+            const delta = 0.0025;
+            const bbox = [lon - delta, lat - delta, lon + delta, lat + delta].join(",");
+            gpsMap.src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lon}`;
+        }
+
+        function updateTelemetry(payload) {
+            if (!payload || !payload.available || !payload.latest) {
+                telemetryStatus.textContent = payload?.error || "Waiting for receiver telemetry…";
+                telemetryUpdated.textContent = "Updated --";
+                ["telLat", "telLon", "telAlt", "telGpsTime", "telTemp", "telPressure", "telHumidity", "telBaro", "telCounter", "telRssi", "telFix"].forEach((id) => setText(id, "--"));
+                updateMap(null, null);
+                return;
+            }
+            const t = payload.latest;
+            telemetryStatus.textContent = "Telemetry live";
+            setText("telLat", fmtNumber(t.lat, 5));
+            setText("telLon", fmtNumber(t.lon, 5));
+            setText("telAlt", fmtNumber(t.alt, 1));
+            setText("telGpsTime", t.gps_time || "--");
+            setText("telTemp", fmtNumber(t.temp, 1));
+            setText("telPressure", fmtNumber(t.pressure, 1));
+            setText("telHumidity", fmtNumber(t.humidity, 1));
+            setText("telBaro", typeof t.baro === "number" ? t.baro.toFixed(1) : (t.baro || "--"));
+            setText("telCounter", typeof t.c === "number" ? String(t.c) : "--");
+            setText("telRssi", fmtNumber(t.rx_rssi, 1));
+            setText("telFix", typeof t.fix === "number" ? String(t.fix) : "--");
+            updateMap(t.lat, t.lon);
+            if (payload.updated) {
+                const ts = new Date(payload.updated * 1000);
+                telemetryUpdated.textContent = `Updated ${ts.toLocaleTimeString()}`;
+            } else {
+                telemetryUpdated.textContent = "Updated --";
+            }
         }
 
         function updateSliderDisplay(motor, value) {
@@ -429,10 +1051,36 @@
             const magnitude = getSliderMagnitude(motor);
             if (magnitude <= 0) {
                 statusEl.textContent = "Set the throttle slider above 0 to move.";
+                setIntent(motor, 0);
                 return false;
             }
+            setIntent(motor, dir);
             sendCommand({ cmd: "set_throttle", motor, value: dir * magnitude });
             return true;
+        }
+
+        function setIntent(motor, dir) {
+            uiIntent.set(motor, dir);
+            const neg = document.getElementById(`intentNeg${motor}`);
+            const pos = document.getElementById(`intentPos${motor}`);
+            const label = document.getElementById(`intentLabel${motor}`);
+            if (neg) {
+                neg.classList.toggle("active-neg", dir < 0);
+                neg.classList.toggle("active-pos", false);
+            }
+            if (pos) {
+                pos.classList.toggle("active-pos", dir > 0);
+                pos.classList.toggle("active-neg", false);
+            }
+            if (label) {
+                if (dir > 0) {
+                    label.textContent = "Intent: positive";
+                } else if (dir < 0) {
+                    label.textContent = "Intent: negative";
+                } else {
+                    label.textContent = "Intent: idle";
+                }
+            }
         }
 
         function updateThrottleCards(snapshot) {
@@ -501,6 +1149,56 @@
             }
         }
 
+        function ensureRawCard(name) {
+            if (rawCards.has(name)) {
+                return rawCards.get(name);
+            }
+            const card = document.createElement("div");
+            card.className = "raw-chip";
+            card.innerHTML = `<span>${name}</span><div class="raw-value">raw --</div><div class="raw-ohms">-- Ω</div>`;
+            rawList.appendChild(card);
+            rawCards.set(name, card);
+            return card;
+        }
+
+        function updateRaw(payload) {
+            if (!payload || !payload.available) {
+                rawStatus.textContent = payload && payload.error ? payload.error : "Waiting for Pico potentiometers…";
+                rawUpdated.textContent = "";
+                rawList.innerHTML = "";
+                rawCards.clear();
+                return;
+            }
+            rawStatus.textContent = "";
+            const seen = new Set();
+            payload.values.forEach((entry) => {
+                const card = ensureRawCard(entry.name);
+                const rawEl = card.querySelector(".raw-value");
+                const ohmEl = card.querySelector(".raw-ohms");
+                if (rawEl) {
+                    rawEl.textContent = typeof entry.raw === "number" ? entry.raw.toString() : "--";
+                }
+                if (ohmEl) {
+                    if (typeof entry.ohms === "number" && Number.isFinite(entry.ohms)) {
+                        ohmEl.textContent = `${entry.ohms.toFixed(0)} Ω`;
+                    } else {
+                        ohmEl.textContent = "-- Ω";
+                    }
+                }
+                seen.add(entry.name);
+            });
+            rawCards.forEach((card, name) => {
+                if (!seen.has(name)) {
+                    card.remove();
+                    rawCards.delete(name);
+                }
+            });
+            if (payload.updated) {
+                const timestamp = new Date(payload.updated * 1000);
+                rawUpdated.textContent = `Updated ${timestamp.toLocaleTimeString()}`;
+            }
+        }
+
         function updateCalibration(payload) {
             if (!payload) {
                 calStatusText.textContent = "Calibration: idle";
@@ -533,14 +1231,49 @@
                 return;
             }
             if (target.dataset.nudge) {
-                sendCommand({ cmd: "nudge", motor: Number(target.dataset.nudge), direction: Number(target.dataset.dir) });
+                if (manualOverrideBlocked()) {
+                    statusEl.textContent = manualLockMessage();
+                    return;
+                }
+                autoPreviewEnabled = false;
+                if (autoPreviewToggle) {
+                    autoPreviewToggle.textContent = "Auto-track: OFF";
+                }
+                const motor = Number(target.dataset.nudge);
+                const dir = Number(target.dataset.dir);
+                setIntent(motor, dir);
+                sendCommand({ cmd: "nudge", motor, direction: dir });
             } else if (target.dataset.release) {
-                sendCommand({ cmd: "release", motor: Number(target.dataset.release) });
+                if (manualOverrideBlocked()) {
+                    statusEl.textContent = manualLockMessage();
+                    return;
+                }
+                const motor = Number(target.dataset.release);
+                setIntent(motor, 0);
+                sendCommand({ cmd: "release", motor });
             } else if (target.dataset.stop) {
-                sendCommand({ cmd: "stop", motor: Number(target.dataset.stop) });
+                if (manualOverrideBlocked()) {
+                    statusEl.textContent = manualLockMessage();
+                    return;
+                }
+                const motor = Number(target.dataset.stop);
+                setIntent(motor, 0);
+                sendCommand({ cmd: "stop", motor });
             } else if (target.dataset.global === "stop") {
+                if (manualOverrideBlocked()) {
+                    statusEl.textContent = manualLockMessage();
+                    return;
+                }
+                setIntent(1, 0);
+                setIntent(2, 0);
                 sendCommand({ cmd: "stopall" });
             } else if (target.dataset.global === "release") {
+                if (manualOverrideBlocked()) {
+                    statusEl.textContent = manualLockMessage();
+                    return;
+                }
+                setIntent(1, 0);
+                setIntent(2, 0);
                 sendCommand({ cmd: "release" });
             } else if (target.dataset.calibrate) {
                 const motor = Number(target.dataset.calibrate);
@@ -571,6 +1304,15 @@
             if (!binding || activeKeys.has(event.code)) {
                 return;
             }
+            if (manualOverrideBlocked()) {
+                statusEl.textContent = manualLockMessage();
+                event.preventDefault();
+                return;
+            }
+            autoPreviewEnabled = false;
+            if (autoPreviewToggle) {
+                autoPreviewToggle.textContent = "Auto-track: OFF";
+            }
             const applied = applyDirectionalThrottle(binding.motor, binding.dir);
             if (applied) {
                 activeKeys.add(event.code);
@@ -584,6 +1326,7 @@
                 return;
             }
             activeKeys.delete(event.code);
+            setIntent(binding.motor, 0);
             sendCommand({ cmd: "set_throttle", motor: binding.motor, value: 0 });
             event.preventDefault();
         });
@@ -614,6 +1357,58 @@
             const value = Number(incrementSlider.value);
             sendCommand({ cmd: "increment", amount: value });
         });
+
+        if (previewToggle) {
+            previewToggle.addEventListener("click", () => {
+                previewOnly = !previewOnly;
+                previewToggle.textContent = `Preview-only: ${previewOnly ? "ON" : "OFF"}`;
+                statusEl.textContent = previewOnly
+                    ? "Preview-only mode enabled: no motor commands are sent."
+                    : "Preview-only mode disabled: motor commands are live.";
+            });
+        }
+
+        if (autoPreviewToggle) {
+            autoPreviewToggle.addEventListener("click", () => {
+                const enable = !autoPreviewEnabled;
+                if (enable && previewOnly) {
+                    previewOnly = false;
+                    if (previewToggle) {
+                        previewToggle.textContent = "Preview-only: OFF";
+                    }
+                }
+                const payload = { cmd: "auto_track", enabled: enable };
+                const base = readBasePayload();
+                if (base) {
+                    payload.base_lat = base.base_lat;
+                    payload.base_lon = base.base_lon;
+                    payload.base_alt = base.base_alt;
+                }
+                sendCommand(payload);
+                autoPreviewStatus.textContent = enable
+                    ? "Auto tracking requested: waiting for runtime status..."
+                    : "Auto tracking disable requested...";
+            });
+        }
+
+        if (sendBaseBtn) {
+            sendBaseBtn.addEventListener("click", () => {
+                const cmd = buildAutoBaseCommand();
+                if (!cmd) {
+                    statusEl.textContent = "Enter valid base latitude and longitude first.";
+                    return;
+                }
+                sendCommand({ text: cmd });
+                autoPreviewStatus.textContent = "Base sent to Pico (auto base).";
+            });
+        }
+
+        if (clearBaseBtn) {
+            clearBaseBtn.addEventListener("click", () => {
+                sendCommand({ text: "auto clearbase" });
+                autoPreviewStatus.textContent = "Base cleared on Pico.";
+            });
+        }
 
         document.getElementById("sendCustom").addEventListener("click", () => {
             const value = document.getElementById("customInput").value.trim();

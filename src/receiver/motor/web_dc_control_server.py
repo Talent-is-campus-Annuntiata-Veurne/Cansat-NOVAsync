@@ -26,10 +26,10 @@ app = Flask(__name__)
 CALIBRATION_FILE = Path(__file__).parent / "pot_calibration.json"
 MOTOR_TO_POT = {
     1: "azimuth",
-    3: "elevation",
+    2: "elevation",
 }
 AZIMUTH_MOTOR = 1
-ELEVATION_MOTOR = 3
+ELEVATION_MOTOR = 2
 CALIBRATION_SPEED = 0.22
 CALIBRATION_SAMPLE_INTERVAL = 0.05
 
@@ -277,7 +277,14 @@ def _calibration_worker(motor: int, pot_name: str, zero_mode: str) -> None:
             zero_deg = 0.0
         else:
             zero_deg = cfg.zero_deg
-        POT_READER.update_calibration(pot_name, raw_min=int(min_raw), raw_max=int(max_raw), zero_deg=zero_deg)
+        min_ohms = POT_READER.raw_to_ohms_value(pot_name, int(min_raw))
+        max_ohms = POT_READER.raw_to_ohms_value(pot_name, int(max_raw))
+        POT_READER.update_calibration(
+            pot_name,
+            ohm_min=min_ohms,
+            ohm_max=max_ohms,
+            zero_deg=zero_deg,
+        )
         POT_READER.save_calibrations()
         _update_calibration_state(
             running=False,
@@ -345,10 +352,12 @@ def _calibration_elevation_worker(motor: int, pot_name: str, method: str, degree
         if max_raw - min_raw < 800:
             raise RuntimeError("Captured sweep range is too small; try again")
         _update_calibration_state(stage="saving", progress=0.85, message="Writing calibration data")
+        min_ohms = POT_READER.raw_to_ohms_value(pot_name, int(min_raw))
+        max_ohms = POT_READER.raw_to_ohms_value(pot_name, int(max_raw))
         POT_READER.update_calibration(
             pot_name,
-            raw_min=int(min_raw),
-            raw_max=int(max_raw),
+            ohm_min=min_ohms,
+            ohm_max=max_ohms,
             zero_deg=0.0,
         )
         POT_READER.save_calibrations()

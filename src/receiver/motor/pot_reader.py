@@ -30,12 +30,24 @@ class PotChannelConfig:
     channel: int
     span_degrees: float = 360.0
     zero_deg: float = 0.0
-    raw_min: int = 200  # tweak after calibrating the physical pot
+    raw_min: int = 200  # legacy raw fallback
     raw_max: int = 65500
+    total_ohms: float = 10000.0  # Bourns 3590 default resistance
+    ohm_min: float = 0.0
+    ohm_max: float = 10000.0
     invert: bool = False
 
     def apply_overrides(self, overrides: Dict[str, object]) -> None:
-        for field in ("span_degrees", "zero_deg", "raw_min", "raw_max", "invert"):
+        for field in (
+            "span_degrees",
+            "zero_deg",
+            "raw_min",
+            "raw_max",
+            "total_ohms",
+            "ohm_min",
+            "ohm_max",
+            "invert",
+        ):
             if field in overrides:
                 setattr(self, field, overrides[field])
 
@@ -53,7 +65,7 @@ DEFAULT_POT_CHANNELS: Sequence[PotChannelConfig] = (
 
 
 class PotAngleReader:
-    """Read MCP3008 channels and convert them into absolute angles."""
+    """Read MCP3008 channels and convert them into angles and ohms."""
 
     def __init__(
         self,
@@ -109,25 +121,44 @@ class PotAngleReader:
                 continue
             raw_value = self._filtered_value(channel)
             voltage = channel.voltage
-            degrees = self._raw_to_degrees(raw_value, cfg)
+            ohms = self._raw_to_ohms(raw_value, cfg)
+            degrees = self._raw_to_degrees(raw_value, cfg, ohms)
             readings.append(
                 {
                     "name": cfg.name,
                     "degrees": degrees,
                     "raw": raw_value,
+                    "ohms": ohms,
                     "voltage": voltage,
                 }
             )
         return readings
 
     @staticmethod
-    def _raw_to_degrees(raw: int, cfg: PotChannelConfig) -> float:
-        span = max(cfg.raw_max - cfg.raw_min, 1)
-        clipped = min(max(raw, cfg.raw_min), cfg.raw_max)
-        fraction = (clipped - cfg.raw_min) / span
+    def _raw_to_degrees(raw: int, cfg: PotChannelConfig, ohms: float | None = None) -> float:
+        if ohms is None:
+            ohms = PotAngleReader._raw_to_ohms(raw, cfg)
+        fraction = PotAngleReader._ohms_to_fraction(ohms, cfg)
         if cfg.invert:
             fraction = 1.0 - fraction
         return cfg.zero_deg + fraction * cfg.span_degrees
+
+    @staticmethod
+    def _raw_to_ohms(raw: int, cfg: PotChannelConfig) -> float:
+        clamped = max(0, min(65535, raw))
+        return (clamped / 65535.0) * cfg.total_ohms
+
+    @staticmethod
+    def _ohms_to_fraction(ohms: float, cfg: PotChannelConfig) -> float:
+        span = max(cfg.ohm_max - cfg.ohm_min, 1e-6)
+        fraction = (ohms - cfg.ohm_min) / span
+        return max(0.0, min(1.0, fraction))
+
+    @staticmethod
+    def _ohms_to_raw(ohms: float, total_ohms: float) -> int:
+        total = max(total_ohms, 1e-6)
+        fraction = max(0.0, min(1.0, ohms / total))
+        return int(round(fraction * 65535))
 
     # Calibration helpers -------------------------------------------------
     def get_config(self, name: str) -> PotChannelConfig | None:
@@ -139,6 +170,9 @@ class PotAngleReader:
         *,
         raw_min: int | None = None,
         raw_max: int | None = None,
+        ohm_min: float | None = None,
+        ohm_max: float | None = None,
+        total_ohms: float | None = None,
         zero_deg: float | None = None,
         span_degrees: float | None = None,
         invert: bool | None = None,
@@ -147,10 +181,19 @@ class PotAngleReader:
         if not cfg:
             raise ValueError(f"Unknown potentiometer '{name}'")
         overrides: Dict[str, object] = {}
+        pending_total = float(total_ohms) if total_ohms is not None else cfg.total_ohms
+        if total_ohms is not None:
+            overrides["total_ohms"] = pending_total
         if raw_min is not None:
             overrides["raw_min"] = int(raw_min)
         if raw_max is not None:
             overrides["raw_max"] = int(raw_max)
+        if ohm_min is not None:
+            overrides["ohm_min"] = float(ohm_min)
+            overrides.setdefault("raw_min", PotAngleReader._ohms_to_raw(float(ohm_min), pending_total))
+        if ohm_max is not None:
+            overrides["ohm_max"] = float(ohm_max)
+            overrides.setdefault("raw_max", PotAngleReader._ohms_to_raw(float(ohm_max), pending_total))
         if zero_deg is not None:
             overrides["zero_deg"] = float(zero_deg)
         if span_degrees is not None:
@@ -188,6 +231,12 @@ class PotAngleReader:
         if channel is None:
             raise ValueError(f"Unknown potentiometer '{name}'")
         return self._filtered_value(channel)
+
+    def raw_to_ohms_value(self, name: str, raw: int) -> float:
+        cfg = self.get_config(name)
+        if not cfg:
+            raise ValueError(f"Unknown potentiometer '{name}'")
+        return self._raw_to_ohms(raw, cfg)
 
     def sample_raw(self, name: str, count: int = 8, delay: float | None = None) -> List[int]:
         if not self.available:

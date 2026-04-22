@@ -14,9 +14,9 @@ from machine import SPI, Pin
 from rfm69 import RFM69
 
 # Radio settings (MUST match emitter)
-FREQ = 435
+FREQ = 433.9
 ENCRYPTION_KEY = bytes("CANSAT_2025-2026", "utf-8")
-NODE_ID = 100  # ID of this node
+NODE_ID = 125  # ID of this node
 
 spi = SPI(0, miso=Pin(4), mosi=Pin(7), sck=Pin(6), polarity=0, phase=0, firstbit=SPI.MSB)  # baudrate=50000,
 nss = Pin(5, Pin.OUT, value=True)

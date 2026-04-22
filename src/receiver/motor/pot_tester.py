@@ -19,8 +19,8 @@ from pot_reader import PotAngleReader
 
 # Reuse the same calibration file as the main server.
 CALIBRATION_PATH = "pot_calibration.json"
-LOWER_THRESHOLD = 0.03  # warn when within 3% of the lower raw span
-UPPER_THRESHOLD = 0.97  # warn when within 3% of the upper span
+LOWER_THRESHOLD = 0.03  # warn when within 3% of the lower resistance span
+UPPER_THRESHOLD = 0.97  # warn when within 3% of the upper resistance span
 JITTER_SAMPLE_COUNT = 12
 WARNING_STREAK = 3  # require N consecutive readings near a stop
 DEFAULT_INTERVAL = 1.0
@@ -59,17 +59,17 @@ def _format_entry(entry: dict, stats: dict | None, *, show_degrees: bool) -> str
     raw_value = entry.get("raw")
     if raw_value is None:
         return f"{entry['name']}: unavailable"
-    parts = [f"{entry['name']}: raw {raw_value:5d}"]
+    ohms = entry.get("ohms")
+    ohms_text = f"{ohms:.0f}Ω" if ohms is not None else "n/a"
+    parts = [f"{entry['name']}: raw {raw_value:5d} ({ohms_text})"]
     if show_degrees and "degrees" in entry:
         parts.append(f"({entry['degrees']:.1f}°)")
     if stats:
-        parts.append(
-            f"avg {stats['avg']:.0f} span {stats['span']}"
-        )
+        parts.append(f"avg {stats['avg']:.0f}Ω span {stats['span']:.0f}Ω")
     return " ".join(parts)
 
 
-def _compute_stats(samples: list[int]) -> Dict[str, float] | None:
+def _compute_stats(samples: list[float]) -> Dict[str, float] | None:
     if not samples:
         return None
     minimum = min(samples)
@@ -118,11 +118,29 @@ def _update_warnings(name: str, fraction: float, state: Dict[str, Dict[str, obje
         tracker["upper_active"] = False
 
 
-def _capture_average(reader: PotAngleReader, name: str, *, samples: int = 32) -> float:
-    values = reader.sample_raw(name, samples, delay=reader.sample_delay)
-    if not values:
+def _capture_bound(reader: PotAngleReader, name: str, *, mode: str) -> tuple[float, Dict[str, float] | None]:
+    sample_count = max(32, JITTER_SAMPLE_COUNT * 2)
+    raw_values = reader.sample_raw(name, sample_count, delay=reader.sample_delay)
+    if not raw_values:
         raise RuntimeError(f"No samples captured for {name}")
-    return sum(values) / len(values)
+    cfg = reader.get_config(name)
+    if not cfg:
+        raise RuntimeError(f"Missing config for {name}")
+    ohm_values = [reader.raw_to_ohms_value(name, raw) for raw in raw_values]
+    stats = _compute_stats(ohm_values)
+    estimate = min(ohm_values) if mode == "lower" else max(ohm_values)
+    return estimate, stats
+
+
+def _prompt_override(prompt: str, default: float) -> float:
+    while True:
+        entry = input(f"  {prompt} [{default:.0f}Ω] -> ").strip()
+        if not entry:
+            return default
+        try:
+            return float(entry)
+        except ValueError:
+            print("    Invalid number; please try again")
 
 
 def _interactive_calibration(reader: PotAngleReader, target: str) -> None:
@@ -140,14 +158,24 @@ def _interactive_calibration(reader: PotAngleReader, target: str) -> None:
             continue
         print(f"\nChannel: {name}")
         input("  Rotate to the LOWER mechanical stop, then press Enter...")
-        lower = _capture_average(reader, name)
-        print(f"  Recorded lower bound: {lower:.0f}")
+        lower_estimate, lower_stats = _capture_bound(reader, name, mode="lower")
+        if lower_stats:
+            print(
+                f"  Samples min/max/span (Ω): {lower_stats['min']:.0f}/"
+                f"{lower_stats['max']:.0f}/{lower_stats['span']:.0f}"
+            )
+        lower = _prompt_override("Lower bound", lower_estimate)
         input("  Rotate to the UPPER mechanical stop, then press Enter...")
-        upper = _capture_average(reader, name)
-        print(f"  Recorded upper bound: {upper:.0f}")
-        if upper - lower < 500:
-            print("  WARNING: span seems small; consider repeating this channel")
-        reader.update_calibration(name, raw_min=int(lower), raw_max=int(upper), zero_deg=0.0)
+        upper_estimate, upper_stats = _capture_bound(reader, name, mode="upper")
+        if upper_stats:
+            print(
+                f"  Samples min/max/span (Ω): {upper_stats['min']:.0f}/"
+                f"{upper_stats['max']:.0f}/{upper_stats['span']:.0f}"
+            )
+        upper = _prompt_override("Upper bound", upper_estimate)
+        if upper - lower < 50:
+            print("  WARNING: span seems small (<50Ω); consider repeating this channel")
+        reader.update_calibration(name, ohm_min=lower, ohm_max=upper, zero_deg=0.0)
         print(f"  Calibration updated for {name}")
     reader.save_calibrations()
     print(f"\nCalibration saved to {CALIBRATION_PATH}. Rerun without --calibrate to monitor readings.")
@@ -174,12 +202,13 @@ def main() -> None:
                 cfg = configs.get(entry.get("name"))
                 stats = None
                 if cfg:
-                    samples = reader.sample_raw(cfg.name, sample_count)
-                    stats = _compute_stats(samples)
+                    raw_samples = reader.sample_raw(cfg.name, sample_count)
+                    ohm_samples = [reader.raw_to_ohms_value(cfg.name, raw) for raw in raw_samples]
+                    stats = _compute_stats(ohm_samples)
                 lines.append(_format_entry(entry, stats, show_degrees=args.show_deg))
-                if cfg and "raw" in entry:
-                    span = max(1, cfg.raw_max - cfg.raw_min)
-                    fraction = (entry["raw"] - cfg.raw_min) / span
+                if cfg and "ohms" in entry:
+                    span = max(cfg.ohm_max - cfg.ohm_min, 1e-6)
+                    fraction = (entry["ohms"] - cfg.ohm_min) / span
                     _update_warnings(entry["name"], fraction, warning_state, warnings)
             print(" | ".join(lines))
             if warnings:
