@@ -54,8 +54,9 @@ GPS_AUTO_AZ_OPPOSITE_WINDOW_DEG = 12.0
 # These multipliers map desired direction to your motor wiring/mechanics.
 GPS_AUTO_AZ_MOTOR_SIGN = 1
 GPS_AUTO_EL_MOTOR_SIGN = 1
-# Antenna boresight offset: 180 means pot azimuth points opposite to antenna front.
-AZIMUTH_FRONT_OFFSET_DEG = 180.0
+# Antenna boresight offset in degrees between azimuth pot angle and antenna front.
+# 0 means azimuth angle already represents the antenna front heading.
+AZIMUTH_FRONT_OFFSET_DEG = 0.0
 # Bearing frame offset for incoming cansat location.
 # Keep default at 0; runtime reverse toggle can add +180 on demand.
 GPS_TARGET_BEARING_OFFSET_DEG = 0.0
