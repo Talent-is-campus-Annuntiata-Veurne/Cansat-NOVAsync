@@ -83,6 +83,7 @@ AUTO_CACHE = {
     "dir": 0,
     "rssi": None,
     "delta": None,
+    "reverseaz": False,
     "updated": 0.0,
 }
 LOCK_CACHE = {
@@ -479,6 +480,8 @@ def _update_auto(line: str) -> None:
             AUTO_CACHE["delta"] = parsed_delta if math.isfinite(parsed_delta) else None
         except Exception:
             AUTO_CACHE["delta"] = None
+        if "reverseaz" in payload:
+            AUTO_CACHE["reverseaz"] = str(payload.get("reverseaz", "")).strip().lower() in {"1", "true", "on", "yes"}
         AUTO_CACHE["updated"] = time.time()
 
 

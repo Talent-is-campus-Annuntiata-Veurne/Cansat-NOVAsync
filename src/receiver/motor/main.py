@@ -56,8 +56,9 @@ GPS_AUTO_AZ_MOTOR_SIGN = 1
 GPS_AUTO_EL_MOTOR_SIGN = 1
 # Antenna boresight offset: 180 means pot azimuth points opposite to antenna front.
 AZIMUTH_FRONT_OFFSET_DEG = 180.0
-# Bearing frame offset for incoming cansat location (180 inverts E/W, N/S).
-GPS_TARGET_BEARING_OFFSET_DEG = 180.0
+# Bearing frame offset for incoming cansat location.
+# Keep default at 0; runtime reverse toggle can add +180 on demand.
+GPS_TARGET_BEARING_OFFSET_DEG = 0.0
 NORTH_LOCK_TOLERANCE_DEG = 2.5
 AZIMUTH_AUTO_CENTER_RAW = 30000
 AZIMUTH_AUTO_LIMIT_DEG = 180.0
@@ -657,8 +658,16 @@ class RSSIAutoTracker:
 		rssi_text = "nan" if rssi is None else "%0.1f" % rssi
 		delta_text = "nan" if delta is None else "%0.2f" % delta
 		print(
-			"AUTO,enabled=%d,state=%s,motor=%d,dir=%d,rssi=%s,delta=%s"
-			% (1 if self.state.auto_enabled else 0, state, motor, direction, rssi_text, delta_text)
+			"AUTO,enabled=%d,state=%s,motor=%d,dir=%d,rssi=%s,delta=%s,reverseaz=%d"
+			% (
+				1 if self.state.auto_enabled else 0,
+				state,
+				motor,
+				direction,
+				rssi_text,
+				delta_text,
+				1 if bool(getattr(self.state, "auto_reverse_az", False)) else 0,
+			)
 		)
 
 	def _enforce_azimuth_limit(self, dir_sign):

@@ -661,8 +661,8 @@
         lockChime.preload = "auto";
         const AUTO_AZ_DEADBAND_DEG = 4;
         const AUTO_EL_DEADBAND_DEG = 3;
-        const AZIMUTH_FRONT_OFFSET_DEG = 0;
-        const AZIMUTH_TARGET_FRAME_OFFSET_DEG = -180;
+        const AZIMUTH_FRONT_OFFSET_DEG = 180;
+        const GPS_TARGET_BEARING_OFFSET_DEG = 0;
         const keyMap = {
             ArrowLeft: { motor: 1, dir: -1 },
             ArrowRight: { motor: 1, dir: 1 },
@@ -806,12 +806,19 @@
                 if (autoPreviewToggle) {
                     autoPreviewToggle.textContent = "Auto-track: OFF";
                 }
+                if (reverseAzBtn) {
+                    reverseAzBtn.textContent = "Reverse azimuth: OFF";
+                }
                 autoPreviewStatus.textContent = "Auto tracking unavailable.";
                 return;
             }
             autoPreviewEnabled = Boolean(payload.enabled);
+            const reverseAz = Boolean(payload.reverseaz);
             if (autoPreviewToggle) {
                 autoPreviewToggle.textContent = `Auto-track: ${autoPreviewEnabled ? "ON" : "OFF"}`;
+            }
+            if (reverseAzBtn) {
+                reverseAzBtn.textContent = `Reverse azimuth: ${reverseAz ? "ON" : "OFF"}`;
             }
             const state = payload.state || (autoPreviewEnabled ? "running" : "off");
             const delta = typeof payload.delta === "number" && Number.isFinite(payload.delta)
@@ -823,7 +830,7 @@
             const m2Dir = motor === 2 ? dir : 0;
             setIntent(1, m1Dir);
             setIntent(2, m2Dir);
-            autoPreviewStatus.textContent = `Auto ${autoPreviewEnabled ? "ON" : "OFF"} | state=${state} | err=${delta}`;
+            autoPreviewStatus.textContent = `Auto ${autoPreviewEnabled ? "ON" : "OFF"} | rev=${reverseAz ? "ON" : "OFF"} | state=${state} | err=${delta}`;
         }
 
         function deg2rad(deg) {
@@ -864,6 +871,14 @@
                 return normalize360(AZIMUTH_FRONT_OFFSET_DEG);
             }
             return normalize360(azimuthDeg + AZIMUTH_FRONT_OFFSET_DEG);
+        }
+
+        function reverseAzEnabled(snapshot) {
+            return Boolean(snapshot?.auto?.reverseaz);
+        }
+
+        function targetBearingOffset(snapshot) {
+            return GPS_TARGET_BEARING_OFFSET_DEG + (reverseAzEnabled(snapshot) ? 180 : 0);
         }
 
         function haversineMeters(lat1, lon1, lat2, lon2) {
@@ -969,7 +984,7 @@
             }
 
             const targetAz = bearingDegrees(baseLat, baseLon, tel.lat, tel.lon);
-            const targetAzFrame = normalize360(targetAz + AZIMUTH_TARGET_FRAME_OFFSET_DEG);
+            const targetAzFrame = normalize360(targetAz + targetBearingOffset(snapshot));
             const horizontalDist = haversineMeters(baseLat, baseLon, tel.lat, tel.lon);
             const heightDelta = resolveHeightDeltaMeters(tel, baseAlt);
             const targetEl = rad2deg(Math.atan2(heightDelta, Math.max(1.0, horizontalDist)));
@@ -1061,7 +1076,7 @@
             }
 
             const wantedHeadingTrue = bearingDegrees(base.base_lat, base.base_lon, tel.lat, tel.lon);
-            const wantedHeading = normalize360(wantedHeadingTrue + AZIMUTH_TARGET_FRAME_OFFSET_DEG);
+            const wantedHeading = normalize360(wantedHeadingTrue + targetBearingOffset(snapshot));
             const antennaHeading = antennaFrontHeadingFromAzimuth(azNow, elNow);
             const err = antennaHeading === null ? null : shortestAngleDiff(wantedHeading, antennaHeading);
             const horizontalDist = haversineMeters(base.base_lat, base.base_lon, tel.lat, tel.lon);
@@ -1542,7 +1557,7 @@
         if (reverseAzBtn) {
             reverseAzBtn.addEventListener("click", () => {
                 sendCommand({ text: "auto reverseaz toggle" });
-                autoPreviewStatus.textContent = "Azimuth target direction toggled on Pico.";
+                autoPreviewStatus.textContent = "Reverse azimuth toggle sent; waiting for Pico status update.";
             });
         }
 
