@@ -36,6 +36,11 @@ app = Flask(__name__)
 SERIAL_LOCK = threading.Lock()
 STATE_LOCK = threading.Lock()
 SERIAL_CONN: serial.Serial | None = None
+SERIAL_PORT: str | None = None
+SERIAL_BAUD: int = 115200
+SERIAL_TIMEOUT: float = 0.1
+SERIAL_RETRY_BACKOFF_S = 1.0
+_SERIAL_LAST_WARN_TS = 0.0
 
 HTML_PAGE = (Path(__file__).parent / "web_ui_dc.html").read_text(encoding="utf-8")
 
@@ -258,11 +263,44 @@ def _log_telemetry_snapshot(payload: dict) -> None:
     _write_log_row(row)
 
 
-def ensure_serial_open() -> serial.Serial:
+def _close_serial_locked() -> None:
+    global SERIAL_CONN
     conn = SERIAL_CONN
-    if conn is None or not conn.is_open:
-        raise RuntimeError("Serial port is not open")
-    return conn
+    if conn is None:
+        return
+    try:
+        if conn.is_open:
+            conn.close()
+    except Exception:
+        pass
+    SERIAL_CONN = None
+
+
+def _open_serial_locked() -> serial.Serial:
+    global SERIAL_CONN, _SERIAL_LAST_WARN_TS
+
+    if SERIAL_CONN is not None and SERIAL_CONN.is_open:
+        return SERIAL_CONN
+
+    if not SERIAL_PORT:
+        raise RuntimeError("Serial configuration is missing")
+
+    try:
+        SERIAL_CONN = serial.Serial(SERIAL_PORT, SERIAL_BAUD, timeout=SERIAL_TIMEOUT)
+        print(f"Serial connected: {SERIAL_PORT} @ {SERIAL_BAUD}")
+        return SERIAL_CONN
+    except Exception as exc:
+        SERIAL_CONN = None
+        now = time.time()
+        if (now - _SERIAL_LAST_WARN_TS) >= SERIAL_RETRY_BACKOFF_S:
+            print(f"[WARN] Serial unavailable ({SERIAL_PORT}): {exc}")
+            _SERIAL_LAST_WARN_TS = now
+        raise RuntimeError(f"Serial unavailable on {SERIAL_PORT}: {exc}")
+
+
+def ensure_serial_open() -> serial.Serial:
+    with SERIAL_LOCK:
+        return _open_serial_locked()
 
 
 def send_line(text: str) -> None:
@@ -272,9 +310,13 @@ def send_line(text: str) -> None:
         return
     payload = (" " + sanitized + "\n").encode("utf-8")
     with SERIAL_LOCK:
-        conn = ensure_serial_open()
-        conn.write(payload)
-        conn.flush()
+        conn = _open_serial_locked()
+        try:
+            conn.write(payload)
+            conn.flush()
+        except Exception as exc:
+            _close_serial_locked()
+            raise RuntimeError(f"Serial write failed: {exc}")
 
 
 def _update_throttles(line: str) -> None:
@@ -481,6 +523,8 @@ def serial_reader() -> None:
         try:
             line = conn.readline()
         except Exception:
+            with SERIAL_LOCK:
+                _close_serial_locked()
             time.sleep(0.2)
             continue
         if not line:
@@ -718,12 +762,19 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    global SERIAL_CONN
+    global SERIAL_PORT, SERIAL_BAUD, SERIAL_TIMEOUT
     args = parse_args()
+    SERIAL_PORT = args.serial
+    SERIAL_BAUD = int(args.baud)
+    SERIAL_TIMEOUT = 0.1
     _init_log_targets()
-    print(f"Opening serial port {args.serial} @ {args.baud}...")
-    SERIAL_CONN = serial.Serial(args.serial, args.baud, timeout=0.1)
-    print("Serial connection established. Launching reader thread...")
+    print(f"Starting serial bridge for {args.serial} @ {args.baud} (auto-reconnect enabled)...")
+    try:
+        ensure_serial_open()
+    except Exception:
+        print("[INFO] Waiting for Pico serial port to become available...")
+
+    print("Launching reader thread...")
     threading.Thread(target=serial_reader, daemon=True).start()
     print(f"Serving DC web UI at http://{args.host}:{args.http_port}")
     print("Press Ctrl+C to stop.")

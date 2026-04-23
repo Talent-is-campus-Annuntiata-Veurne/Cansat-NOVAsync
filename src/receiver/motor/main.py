@@ -49,10 +49,15 @@ GPS_AUTO_SETTLE_MS = 1000
 GPS_AUTO_STEP = 0.12
 GPS_AUTO_AZ_DEADBAND_DEG = 6.0
 GPS_AUTO_EL_DEADBAND_DEG = 4.0
+GPS_AUTO_AZ_OPPOSITE_WINDOW_DEG = 12.0
 # Coordinate convention is fixed: left=-, right=+, down=-, up=+.
 # These multipliers map desired direction to your motor wiring/mechanics.
 GPS_AUTO_AZ_MOTOR_SIGN = 1
 GPS_AUTO_EL_MOTOR_SIGN = 1
+# Antenna boresight offset: 180 means pot azimuth points opposite to antenna front.
+AZIMUTH_FRONT_OFFSET_DEG = 180.0
+# Bearing frame offset for incoming cansat location (180 inverts E/W, N/S).
+GPS_TARGET_BEARING_OFFSET_DEG = 180.0
 NORTH_LOCK_TOLERANCE_DEG = 2.5
 AZIMUTH_AUTO_CENTER_RAW = 30000
 AZIMUTH_AUTO_LIMIT_DEG = 180.0
@@ -90,7 +95,7 @@ POT_CHANNELS = (
 		"signed_output": False,
 		"angle_smoothing_window": 3,
 		"angle_filter_alpha": 0.45,
-		"invert": False,
+		"invert": True,
 		"enabled": True,
 	},
 )
@@ -426,6 +431,7 @@ class PicoDCControlState:
 		self.increment = DEFAULT_INCREMENT
 		self.throttles = {motor: 0.0 for motor in range(1, motor_count + 1)}
 		self.auto_enabled = False
+		self.auto_reverse_az = False
 		self.auto_base_lat = None
 		self.auto_base_lon = None
 		self.auto_base_alt = 0.0
@@ -580,8 +586,25 @@ class PicoDCControlState:
 					base_text = "unset"
 				else:
 					base_text = "%.6f,%.6f,%.1f" % (self.auto_base_lat, self.auto_base_lon, self.auto_base_alt)
-				return True, "AUTO=%s base=%s" % (("ON" if self.auto_enabled else "OFF"), base_text)
+				rev_text = "ON" if self.auto_reverse_az else "OFF"
+				return True, "AUTO=%s base=%s reverseaz=%s" % (("ON" if self.auto_enabled else "OFF"), base_text, rev_text)
 			mode = parts[1].lower()
+			if mode in {"reverseaz", "reverse", "raz"}:
+				if len(parts) < 3:
+					self.auto_reverse_az = not self.auto_reverse_az
+				else:
+					arg = parts[2].lower()
+					if arg in {"on", "1", "true"}:
+						self.auto_reverse_az = True
+					elif arg in {"off", "0", "false"}:
+						self.auto_reverse_az = False
+					elif arg in {"toggle", "flip"}:
+						self.auto_reverse_az = not self.auto_reverse_az
+					elif arg == "status":
+						pass
+					else:
+						return True, "Usage: auto reverseaz <on|off|toggle|status>"
+				return True, "Auto reverse azimuth %s" % ("enabled" if self.auto_reverse_az else "disabled")
 			if mode == "base":
 				if len(parts) < 4:
 					return True, "Usage: auto base <lat> <lon> [alt_m]"
@@ -606,7 +629,7 @@ class PicoDCControlState:
 				self.stop_motor(1)
 				self.stop_motor(2)
 				return True, "Auto tracking disabled"
-			return True, "Usage: auto <on|off|status|base|clearbase>"
+			return True, "Usage: auto <on|off|status|base|clearbase|reverseaz>"
 		return True, "Unknown command"
 
 
@@ -622,6 +645,7 @@ class RSSIAutoTracker:
 		self.direction = {1: 1, 2: 1}
 		self._last_status_ticks = utime.ticks_ms()
 		self._last_status_state = None
+		self._last_az_dir_desired = 1
 
 	def _emit_status(self, state="idle", motor=0, direction=0, rssi=None, delta=None, force=False):
 		now = utime.ticks_ms()
@@ -645,11 +669,40 @@ class RSSIAutoTracker:
 		rel_deg = channel.relative_degrees_from_raw_center(raw, AZIMUTH_AUTO_CENTER_RAW)
 		if dir_sign > 0 and rel_deg >= AZIMUTH_AUTO_LIMIT_DEG:
 			self._emit_status(state="az_limit_pos", motor=1, direction=dir_sign, delta=rel_deg, force=True)
-			return -1
+			return 0
 		if dir_sign < 0 and rel_deg <= -AZIMUTH_AUTO_LIMIT_DEG:
 			self._emit_status(state="az_limit_neg", motor=1, direction=dir_sign, delta=rel_deg, force=True)
-			return 1
+			return 0
 		return dir_sign
+
+	def _choose_azimuth_dir(self, az_err):
+		if abs(az_err) <= GPS_AUTO_AZ_DEADBAND_DEG:
+			return 0
+
+		# Ambiguous case near 180° (target on opposite side): steer away from
+		# whichever physical azimuth limit we are closest to.
+		if abs(abs(az_err) - 180.0) <= GPS_AUTO_AZ_OPPOSITE_WINDOW_DEG:
+			channel = self.pot_reader._get_channel("azimuth")
+			if channel is not None:
+				try:
+					raw = channel.read_filtered_raw()
+					rel_deg = channel.relative_degrees_from_raw_center(raw, AZIMUTH_AUTO_CENTER_RAW)
+					if rel_deg > 0:
+						dir_choice = -1
+					elif rel_deg < 0:
+						dir_choice = 1
+					else:
+						dir_choice = self._last_az_dir_desired
+				except Exception:
+					dir_choice = self._last_az_dir_desired
+			else:
+				dir_choice = self._last_az_dir_desired
+		else:
+			dir_choice = 1 if az_err > 0 else -1
+
+		if dir_choice != 0:
+			self._last_az_dir_desired = dir_choice
+		return dir_choice
 
 	def _normalize360(self, value):
 		v = value % 360.0
@@ -699,8 +752,8 @@ class RSSIAutoTracker:
 			abs(azimuth_deg) <= NORTH_LOCK_TOLERANCE_DEG
 			and abs(elevation_deg) <= NORTH_LOCK_TOLERANCE_DEG
 		):
-			return 0.0
-		return self._normalize360(azimuth_deg)
+			return self._normalize360(0.0 + AZIMUTH_FRONT_OFFSET_DEG)
+		return self._normalize360(azimuth_deg + AZIMUTH_FRONT_OFFSET_DEG)
 
 	def _compute_gps_guidance(self):
 		if self.state.auto_base_lat is None or self.state.auto_base_lon is None:
@@ -715,10 +768,30 @@ class RSSIAutoTracker:
 			target_lon = float(tel.get("lon"))
 		except Exception:
 			return None
+		baro_alt = None
+		gps_alt = None
 		try:
-			target_alt = float(tel.get("alt"))
+			baro_alt = float(tel.get("baro"))
+			if not math.isfinite(baro_alt):
+				baro_alt = None
 		except Exception:
-			target_alt = self.state.auto_base_alt
+			baro_alt = None
+		try:
+			gps_alt = float(tel.get("alt"))
+			if not math.isfinite(gps_alt):
+				gps_alt = None
+		except Exception:
+			gps_alt = None
+
+		# Elevation needs a height DIFFERENCE over horizontal distance.
+		# Use barometric height as relative height above launch (preferred),
+		# then GPS altitude fallback in base-altitude frame when baro is bad.
+		if baro_alt is not None and baro_alt >= -1.0:
+			height_delta = baro_alt
+		elif gps_alt is not None:
+			height_delta = gps_alt - self.state.auto_base_alt
+		else:
+			height_delta = 0.0
 
 		readings = self.pot_reader.read_angles()
 		az_now = self._get_angle(readings, "azimuth")
@@ -727,13 +800,19 @@ class RSSIAutoTracker:
 			return None
 		heading_now = self._azimuth_heading_deg(az_now, el_now)
 
-		target_az = self._bearing_deg(self.state.auto_base_lat, self.state.auto_base_lon, target_lat, target_lon)
+		target_bearing_offset = GPS_TARGET_BEARING_OFFSET_DEG
+		if bool(getattr(self.state, "auto_reverse_az", False)):
+			target_bearing_offset += 180.0
+		target_az = self._normalize360(
+			self._bearing_deg(self.state.auto_base_lat, self.state.auto_base_lon, target_lat, target_lon)
+			+ target_bearing_offset
+		)
 		horizontal = self._haversine_m(self.state.auto_base_lat, self.state.auto_base_lon, target_lat, target_lon)
-		target_el = math.degrees(math.atan2(target_alt - self.state.auto_base_alt, max(1.0, horizontal)))
+		target_el = math.degrees(math.atan2(height_delta, max(1.0, horizontal)))
 
 		az_err = self._shortest_diff(target_az, heading_now)
 		el_err = target_el - el_now
-		az_dir_desired = 0 if abs(az_err) <= GPS_AUTO_AZ_DEADBAND_DEG else (1 if az_err > 0 else -1)
+		az_dir_desired = self._choose_azimuth_dir(az_err)
 		el_dir_desired = 0 if abs(el_err) <= GPS_AUTO_EL_DEADBAND_DEG else (1 if el_err > 0 else -1)
 		az_dir = az_dir_desired * GPS_AUTO_AZ_MOTOR_SIGN
 		el_dir = el_dir_desired * GPS_AUTO_EL_MOTOR_SIGN
@@ -996,7 +1075,8 @@ def _receiver_emit(line):
 	print(line)
 	if not isinstance(line, str) or not line.startswith("TEL,"):
 		return
-	payload = {}
+	prev_payload = _LATEST_TELEMETRY if isinstance(_LATEST_TELEMETRY, dict) else {}
+	payload = dict(prev_payload)
 	for token in line.split(",")[1:]:
 		if "=" not in token:
 			continue
@@ -1011,7 +1091,7 @@ def _receiver_emit(line):
 				payload[key] = int(value)
 			except Exception:
 				payload[key] = None
-		elif key in {"lat", "lon", "alt", "rx_rssi"}:
+		elif key in {"lat", "lon", "alt", "baro", "rx_rssi"}:
 			try:
 				payload[key] = float(value)
 			except Exception:
@@ -1035,35 +1115,56 @@ def _get_latest_telemetry():
 def _background_stream_loop(state):
 	global _POT_STREAM_RUNNING
 	receiver = None
+	rx_retry_ms = 2000
+	next_rx_retry_ticks = utime.ticks_ms()
+
+	def _try_init_receiver():
+		nonlocal receiver, next_rx_retry_ticks
+		if data_module is None:
+			return
+		try:
+			receiver = data_module.ReceiverDataModule(
+				emit_line=_receiver_emit,
+			)
+			print("[RX] receiver ready")
+		except Exception as exc:
+			receiver = None
+			print("[RX] receiver init error:", exc)
+			next_rx_retry_ticks = utime.ticks_add(utime.ticks_ms(), rx_retry_ms)
 
 	def _poll_receiver_once():
+		nonlocal receiver, next_rx_retry_ticks
 		if receiver is None:
 			return
 		try:
 			receiver.poll_once(timeout=0)
-		except Exception:
-			pass
+		except Exception as exc:
+			print("[RX] receiver poll error (hook):", exc)
+			receiver = None
+			next_rx_retry_ticks = utime.ticks_add(utime.ticks_ms(), rx_retry_ms)
 
 	auto_tracker = RSSIAutoTracker(state, POT_READER, _get_latest_telemetry, poll_hook=_poll_receiver_once)
 	last_pot_ticks = utime.ticks_ms()
 	if data_module is None:
 		print("[RX] data_module import failed; telemetry receiver disabled")
 	else:
-		try:
-			receiver = data_module.ReceiverDataModule(
-				emit_line=_receiver_emit,
-			)
-		except Exception as exc:
-			print("[RX] receiver init error:", exc)
-			receiver = None
+		_try_init_receiver()
 
 	while _POT_STREAM_RUNNING:
+		now = utime.ticks_ms()
+		if receiver is None and data_module is not None:
+			if utime.ticks_diff(now, next_rx_retry_ticks) >= 0:
+				_try_init_receiver()
+				if receiver is None:
+					next_rx_retry_ticks = utime.ticks_add(now, rx_retry_ms)
+
 		if receiver is not None:
 			try:
 				receiver.poll_once(timeout=0.01)
 			except Exception as exc:
 				print("[RX] receiver poll error:", exc)
 				receiver = None
+				next_rx_retry_ticks = utime.ticks_add(utime.ticks_ms(), rx_retry_ms)
 
 		try:
 			auto_tracker.maybe_step()

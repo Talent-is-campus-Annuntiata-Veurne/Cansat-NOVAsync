@@ -373,7 +373,7 @@ sensor = init_sensor() if callable(init_sensor) else None
 # --- GPS setup (UART0 on GP0/GP1) ---
 gps = init_gps() if callable(init_gps) else None
 GPS_SLEEP_SLICE_MS = 50
-LOOP_PERIOD_MS = 1000  # Target 1 Hz telemetry cadence
+LOOP_PERIOD_MS = 500  # 0.5 s cadence between alternating packet phases
 baro_ref_hpa = None
 _baro_baseline_samples = []
 
@@ -382,6 +382,8 @@ _baro_baseline_samples = []
 counter = 1
 rfm.destination = BASESTATION_ID  # Send to specific node 100
 last_beacon_ms = time.ticks_ms()
+send_gps_cycle = True
+last_sent_gps_time = "NOFIX"
 while True:
     loop_start = time.ticks_ms()
     try:
@@ -463,34 +465,43 @@ while True:
         temp_display = _fmt(t, 1)
         _oled_update(lat, lon, temp_display)
 
-        msg = "SENS;c=%d;t=%s;p=%s;bh=%s;h=%s;gt=%s" % (
-            counter,
-            temp_display,
-            _fmt(p, 1),
-            baro_alt_display,
-            _fmt(-1 if h is None else h, 1),
-            gps_time,
-        )
-        _send_packet(msg)
-        if gps_info and gps_info.get("has_fix"):
-            def _fmt_radio(value, decimals=3):
+        if send_gps_cycle:
+            def _fmt_radio(value):
                 try:
-                    return ("%0." + str(decimals) + "f") % float(value)
+                    # Keep full float precision (no forced decimal truncation)
+                    # so the ground station can track exact coordinates.
+                    return str(float(value))
                 except:
                     return "nan"
 
+            gps_msg_time = gps_time if (gps_info and gps_info.get("has_fix")) else "NOFIX"
             gps_msg_primary = "G1;c=%d;x=%s;y=%s" % (
                 counter,
-                _fmt_radio(gps_info.get("latitude"), 3),
-                _fmt_radio(gps_info.get("longitude"), 3),
+                _fmt_radio(gps_info.get("latitude") if gps_info else None),
+                _fmt_radio(gps_info.get("longitude") if gps_info else None),
             )
-            gps_msg_secondary = "G2;c=%d;z=%s;v=%s" % (
+            gps_msg_secondary = "G2;c=%d;z=%s;v=%s;gt=%s" % (
                 counter,
-                _fmt_radio(gps_info.get("altitude_m"), 1),
-                _fmt_radio(gps_info.get("speed_kmh"), 1),
+                _fmt_radio(gps_info.get("altitude_m") if gps_info else None),
+                _fmt_radio(gps_info.get("speed_kmh") if gps_info else None),
+                gps_msg_time,
             )
             _send_packet(gps_msg_primary)
             _send_packet(gps_msg_secondary)
+            if gps_info and gps_info.get("has_fix"):
+                last_sent_gps_time = gps_time
+        else:
+            # Sensor frames are sent on the alternating second and carry the
+            # timestamp of the last GPS frame transmission for aligned logging.
+            msg = "SENS;c=%d;t=%s;p=%s;bh=%s;h=%s;gt=%s" % (
+                counter,
+                temp_display,
+                _fmt(p, 1),
+                baro_alt_display,
+                _fmt(-1 if h is None else h, 1),
+                last_sent_gps_time,
+            )
+            _send_packet(msg)
         # CSV output only: counter, time_hms, tempC, pressure_hPa, humidity_pct_or_-1,
         # lat_deg, lon_deg, alt_m, speed_kmh, fix_flag, gps_time
         time_str = gps_time
@@ -512,6 +523,7 @@ while True:
         # Append to log file (bounded for Pico storage safety)
         _log_append(csv)
         counter += 1
+        send_gps_cycle = not send_gps_cycle
     except Exception as exc:
         print("LOOP WARN: recovered from runtime exception:", exc)
         try:

@@ -433,6 +433,40 @@
             color: #1e293b;
             font-weight: 700;
         }
+        .elevation-guide {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.2rem;
+            min-width: 34px;
+            flex: 0 0 auto;
+        }
+        .elev-label {
+            font-size: 0.62rem;
+            font-weight: 800;
+            color: #475569;
+            letter-spacing: 0.04em;
+            user-select: none;
+        }
+        .elev-track {
+            position: relative;
+            width: 16px;
+            height: 84px;
+            border-radius: 999px;
+            background: linear-gradient(180deg, #dbeafe 0%, #f1f5f9 50%, #ffedd5 100%);
+            box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.18);
+        }
+        .elev-pointer {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 12px;
+            height: 4px;
+            border-radius: 999px;
+            background: #0f172a;
+            transform: translate(-50%, -50%);
+            transition: top 120ms linear, opacity 120ms linear, background-color 120ms linear;
+        }
     </style>
 </head>
 <body>
@@ -509,6 +543,7 @@
                 </label>
                 <button class="ghost base-action" id="sendBaseBtn" type="button">Send base</button>
                 <button class="ghost base-action" id="clearBaseBtn" type="button">Clear base</button>
+                <button class="ghost base-action" id="reverseAzBtn" type="button">Reverse azimuth</button>
             </div>
             <div class="auto-text" id="autoPreviewStatus">Auto tracking idle. Set base and send to Pico.</div>
             <div class="guidance-compass">
@@ -521,10 +556,20 @@
                     <div class="needle needle-current" id="currentNeedle"></div>
                     <div class="compass-center"></div>
                 </div>
+                <div class="elevation-guide" aria-hidden="true">
+                    <span class="elev-label">UP</span>
+                    <div class="elev-track">
+                        <div class="elev-pointer" id="elevationPointer"></div>
+                    </div>
+                    <span class="elev-label">DOWN</span>
+                </div>
                 <div class="compass-readout" id="guidanceText">
                     <div>Wanted heading: --</div>
                     <div>Antenna heading: --</div>
                     <div>Wanted turn: --</div>
+                    <div>Wanted elevation: --</div>
+                    <div>Antenna elevation: --</div>
+                    <div>Wanted tilt: --</div>
                 </div>
             </div>
         </div>
@@ -599,8 +644,10 @@
         const baseAltInput = document.getElementById("baseAltInput");
         const sendBaseBtn = document.getElementById("sendBaseBtn");
         const clearBaseBtn = document.getElementById("clearBaseBtn");
+        const reverseAzBtn = document.getElementById("reverseAzBtn");
         const targetNeedle = document.getElementById("targetNeedle");
         const currentNeedle = document.getElementById("currentNeedle");
+        const elevationPointer = document.getElementById("elevationPointer");
         const guidanceText = document.getElementById("guidanceText");
         const angleCards = new Map();
         const rawCards = new Map();
@@ -614,6 +661,8 @@
         lockChime.preload = "auto";
         const AUTO_AZ_DEADBAND_DEG = 4;
         const AUTO_EL_DEADBAND_DEG = 3;
+        const AZIMUTH_FRONT_OFFSET_DEG = 0;
+        const AZIMUTH_TARGET_FRAME_OFFSET_DEG = -180;
         const keyMap = {
             ArrowLeft: { motor: 1, dir: -1 },
             ArrowRight: { motor: 1, dir: 1 },
@@ -804,6 +853,19 @@
             return diff;
         }
 
+        function antennaFrontHeadingFromAzimuth(azimuthDeg, elevationDeg = null) {
+            if (!(typeof azimuthDeg === "number" && Number.isFinite(azimuthDeg))) {
+                return null;
+            }
+            if (
+                typeof elevationDeg === "number" && Number.isFinite(elevationDeg)
+                && Math.abs(azimuthDeg) <= 2.5 && Math.abs(elevationDeg) <= 2.5
+            ) {
+                return normalize360(AZIMUTH_FRONT_OFFSET_DEG);
+            }
+            return normalize360(azimuthDeg + AZIMUTH_FRONT_OFFSET_DEG);
+        }
+
         function haversineMeters(lat1, lon1, lat2, lon2) {
             const R = 6371000;
             const p1 = deg2rad(lat1);
@@ -865,6 +927,18 @@
             return `auto base ${base.base_lat.toFixed(6)} ${base.base_lon.toFixed(6)} ${base.base_alt.toFixed(1)}`;
         }
 
+        function resolveHeightDeltaMeters(tel, baseAlt) {
+            const baro = Number(tel?.baro);
+            if (Number.isFinite(baro) && baro >= -1) {
+                return baro;
+            }
+            const gpsAlt = Number(tel?.alt);
+            if (Number.isFinite(gpsAlt)) {
+                return gpsAlt - baseAlt;
+            }
+            return 0;
+        }
+
         function applyAutoTrackPreview(snapshot) {
             const tel = snapshot?.telemetry?.latest;
             const hasFix = tel && Number(tel.fix) === 1;
@@ -895,11 +969,20 @@
             }
 
             const targetAz = bearingDegrees(baseLat, baseLon, tel.lat, tel.lon);
+            const targetAzFrame = normalize360(targetAz + AZIMUTH_TARGET_FRAME_OFFSET_DEG);
             const horizontalDist = haversineMeters(baseLat, baseLon, tel.lat, tel.lon);
-            const targetAlt = typeof tel.alt === "number" && Number.isFinite(tel.alt) ? tel.alt : baseAlt;
-            const targetEl = rad2deg(Math.atan2(targetAlt - baseAlt, Math.max(1.0, horizontalDist)));
+            const heightDelta = resolveHeightDeltaMeters(tel, baseAlt);
+            const targetEl = rad2deg(Math.atan2(heightDelta, Math.max(1.0, horizontalDist)));
 
-            const azErr = shortestAngleDiff(targetAz, azNow);
+            const headingNow = antennaFrontHeadingFromAzimuth(azNow, elNow);
+            if (!(typeof headingNow === "number" && Number.isFinite(headingNow))) {
+                setIntent(1, 0);
+                setIntent(2, 0);
+                autoPreviewStatus.textContent = "Auto preview waiting for valid azimuth heading.";
+                return;
+            }
+
+            const azErr = shortestAngleDiff(targetAzFrame, headingNow);
             const elErr = targetEl - elNow;
             const m1Dir = Math.abs(azErr) <= AUTO_AZ_DEADBAND_DEG ? 0 : (azErr > 0 ? 1 : -1);
             const m2Dir = Math.abs(elErr) <= AUTO_EL_DEADBAND_DEG ? 0 : (elErr > 0 ? 1 : -1);
@@ -925,10 +1008,36 @@
             needleEl.style.transform = `translate(-50%, -100%) rotate(${normalize360(headingDeg)}deg)`;
         }
 
+        function setElevationGuide(elErr) {
+            if (!elevationPointer) {
+                return;
+            }
+            if (!(typeof elErr === "number" && Number.isFinite(elErr))) {
+                elevationPointer.style.opacity = "0.3";
+                elevationPointer.style.top = "50%";
+                elevationPointer.style.backgroundColor = "#0f172a";
+                return;
+            }
+
+            const maxVisualErr = 25.0;
+            const normalized = Math.max(-1, Math.min(1, elErr / maxVisualErr));
+            const topPct = 50 - (normalized * 45);
+            elevationPointer.style.opacity = "1";
+            elevationPointer.style.top = `${topPct}%`;
+            if (Math.abs(elErr) <= AUTO_EL_DEADBAND_DEG) {
+                elevationPointer.style.backgroundColor = "#16a34a";
+            } else if (elErr > 0) {
+                elevationPointer.style.backgroundColor = "#2563eb";
+            } else {
+                elevationPointer.style.backgroundColor = "#f97316";
+            }
+        }
+
         function updateGuidanceCompass(snapshot) {
             const tel = snapshot?.telemetry?.latest;
             const base = readBasePayload();
             const azNow = getAngleFromSnapshot(snapshot, "azimuth");
+            const elNow = getAngleFromSnapshot(snapshot, "elevation");
 
             if (!guidanceText) {
                 return;
@@ -937,7 +1046,8 @@
             if (!base) {
                 setNeedleHeading(targetNeedle, null);
                 setNeedleHeading(currentNeedle, azNow);
-                guidanceText.innerHTML = "<div>Wanted heading: --</div><div>Antenna heading: --</div><div>Wanted turn: enter base lat/lon</div>";
+                setElevationGuide(null);
+                guidanceText.innerHTML = "<div>Wanted heading: --</div><div>Antenna heading: --</div><div>Wanted turn: enter base lat/lon</div><div>Wanted elevation: --</div><div>Antenna elevation: --</div><div>Wanted tilt: enter base lat/lon</div>";
                 return;
             }
 
@@ -945,13 +1055,19 @@
             if (!hasFix) {
                 setNeedleHeading(targetNeedle, null);
                 setNeedleHeading(currentNeedle, azNow);
-                guidanceText.innerHTML = "<div>Wanted heading: --</div><div>Antenna heading: --</div><div>Wanted turn: waiting GPS fix</div>";
+                setElevationGuide(null);
+                guidanceText.innerHTML = "<div>Wanted heading: --</div><div>Antenna heading: --</div><div>Wanted turn: waiting GPS fix</div><div>Wanted elevation: --</div><div>Antenna elevation: --</div><div>Wanted tilt: waiting GPS fix</div>";
                 return;
             }
 
-            const wantedHeading = bearingDegrees(base.base_lat, base.base_lon, tel.lat, tel.lon);
-            const antennaHeading = typeof azNow === "number" && Number.isFinite(azNow) ? normalize360(azNow) : null;
+            const wantedHeadingTrue = bearingDegrees(base.base_lat, base.base_lon, tel.lat, tel.lon);
+            const wantedHeading = normalize360(wantedHeadingTrue + AZIMUTH_TARGET_FRAME_OFFSET_DEG);
+            const antennaHeading = antennaFrontHeadingFromAzimuth(azNow, elNow);
             const err = antennaHeading === null ? null : shortestAngleDiff(wantedHeading, antennaHeading);
+            const horizontalDist = haversineMeters(base.base_lat, base.base_lon, tel.lat, tel.lon);
+            const heightDelta = resolveHeightDeltaMeters(tel, base.base_alt);
+            const wantedElevation = rad2deg(Math.atan2(heightDelta, Math.max(1.0, horizontalDist)));
+            const elErr = typeof elNow === "number" && Number.isFinite(elNow) ? (wantedElevation - elNow) : null;
 
             let turnText = "hold";
             if (typeof err === "number" && Number.isFinite(err)) {
@@ -962,12 +1078,25 @@
                 turnText = "waiting azimuth";
             }
 
+            let tiltText = "hold";
+            if (typeof elErr === "number" && Number.isFinite(elErr)) {
+                if (Math.abs(elErr) > AUTO_EL_DEADBAND_DEG) {
+                    tiltText = elErr > 0 ? "up" : "down";
+                }
+            } else {
+                tiltText = "waiting elevation";
+            }
+
             setNeedleHeading(targetNeedle, wantedHeading);
             setNeedleHeading(currentNeedle, antennaHeading);
+            setElevationGuide(elErr);
             guidanceText.innerHTML = `
                 <div>Wanted heading: ${wantedHeading.toFixed(1)}°</div>
                 <div>Antenna heading: ${antennaHeading === null ? "--" : antennaHeading.toFixed(1) + "°"}</div>
                 <div>Wanted turn: ${turnText}${typeof err === "number" && Number.isFinite(err) ? ` (${err.toFixed(1)}°)` : ""}</div>
+                <div>Wanted elevation: ${wantedElevation.toFixed(1)}°</div>
+                <div>Antenna elevation: ${typeof elNow === "number" && Number.isFinite(elNow) ? elNow.toFixed(1) + "°" : "--"}</div>
+                <div>Wanted tilt: ${tiltText}${typeof elErr === "number" && Number.isFinite(elErr) ? ` (${elErr.toFixed(1)}°)` : ""}</div>
             `;
         }
 
@@ -1407,6 +1536,13 @@
             clearBaseBtn.addEventListener("click", () => {
                 sendCommand({ text: "auto clearbase" });
                 autoPreviewStatus.textContent = "Base cleared on Pico.";
+            });
+        }
+
+        if (reverseAzBtn) {
+            reverseAzBtn.addEventListener("click", () => {
+                sendCommand({ text: "auto reverseaz toggle" });
+                autoPreviewStatus.textContent = "Azimuth target direction toggled on Pico.";
             });
         }
 

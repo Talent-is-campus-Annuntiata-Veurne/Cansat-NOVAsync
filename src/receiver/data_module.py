@@ -73,43 +73,26 @@ class ReceiverDataModule:
         self._emit_line = emit_line
         self._on_rssi_sample = on_rssi_sample
         self._rfm = _build_radio()
-        self._packet_cache = {}
         self._last_emitted_counter_num = None
         self._rssi_ema = None
         self._rssi_alpha = 0.35
         self._last_rssi_sample = None
+        self._last_gps_time = "NOFIX"
+        self._last_fix = "0"
+        self._last_lat = "nan"
+        self._last_lon = "nan"
+        self._last_alt = "nan"
+        self._last_speed = "nan"
+        self._last_temp = "nan"
+        self._last_pressure = "nan"
+        self._last_baro = "nan"
+        self._last_humidity = "nan"
 
     def _emit(self, text):
         if callable(self._emit_line):
             self._emit_line(text)
         else:
             print(text)
-
-    def _get_entry(self, counter):
-        entry = self._packet_cache.get(counter)
-        if entry is None:
-            entry = {"counter": counter}
-            try:
-                entry["counter_num"] = int(counter)
-            except Exception:
-                entry["counter_num"] = None
-            self._packet_cache[counter] = entry
-        return entry
-
-    def _flush_entry(self, counter):
-        entry = self._packet_cache.pop(counter, None)
-        if not entry:
-            return
-        counter_num = entry.get("counter_num")
-        if (
-            isinstance(counter_num, int)
-            and isinstance(self._last_emitted_counter_num, int)
-            and counter_num <= self._last_emitted_counter_num
-        ):
-            return
-        self._emit(_format_telemetry_line(entry))
-        if isinstance(counter_num, int):
-            self._last_emitted_counter_num = counter_num
 
     def _is_stale_counter(self, counter):
         try:
@@ -118,27 +101,14 @@ class ReceiverDataModule:
             return False
         if not isinstance(self._last_emitted_counter_num, int):
             return False
-        return counter_num <= self._last_emitted_counter_num
+        return counter_num < self._last_emitted_counter_num
 
-    def _maybe_flush(self, counter, force=False):
-        entry = self._packet_cache.get(counter)
-        if not entry:
+    def _mark_emitted_counter(self, counter):
+        try:
+            counter_num = int(counter)
+        except Exception:
             return
-        if not entry.get("sensor_complete"):
-            return
-        if not entry.get("gps_complete") and not force:
-            return
-        self._flush_entry(counter)
-
-    def _flush_stale(self, current_counter_num):
-        if current_counter_num is None:
-            return
-        for key, entry in list(self._packet_cache.items()):
-            key_num = entry.get("counter_num")
-            if key_num is None:
-                continue
-            if current_counter_num - key_num > 1:
-                self._maybe_flush(key, force=True)
+        self._last_emitted_counter_num = counter_num
 
     def _as_float_or_none(self, value):
         try:
@@ -171,7 +141,6 @@ class ReceiverDataModule:
         counter = data.get("c", "nan")
         if self._is_stale_counter(counter):
             return
-        entry = self._get_entry(counter)
 
         rssi_raw, rssi_avg = self._update_rssi()
         if rssi_avg is not None:
@@ -181,20 +150,40 @@ class ReceiverDataModule:
         else:
             rssi_str = "nan"
 
-        entry.update(
-            {
-                "time": data.get("gt", "NOFIX"),
-                "temp": data.get("t", "nan"),
-                "pressure": data.get("p", "nan"),
-                "baro": data.get("bh", "nan"),
-                "humidity": data.get("h", "nan"),
-                "gps_time": data.get("gt", "NOFIX"),
-                "rx_rssi": rssi_str,
-                "sensor_complete": True,
-            }
-        )
-        self._maybe_flush(counter)
-        self._flush_stale(entry.get("counter_num"))
+        gps_time = data.get("gt", "NOFIX")
+        if gps_time in {"nan", "", None}:
+            gps_time = self._last_gps_time
+
+        temp = data.get("t", "nan")
+        pressure = data.get("p", "nan")
+        baro = data.get("bh", "nan")
+        humidity = data.get("h", "nan")
+        if temp != "nan":
+            self._last_temp = temp
+        if pressure != "nan":
+            self._last_pressure = pressure
+        if baro != "nan":
+            self._last_baro = baro
+        if humidity != "nan":
+            self._last_humidity = humidity
+
+        entry = {
+            "counter": counter,
+            "time": gps_time,
+            "temp": self._last_temp,
+            "pressure": self._last_pressure,
+            "baro": self._last_baro,
+            "humidity": self._last_humidity,
+            "lat": self._last_lat,
+            "lon": self._last_lon,
+            "alt": self._last_alt,
+            "speed": self._last_speed,
+            "fix": self._last_fix,
+            "gps_time": gps_time,
+            "rx_rssi": rssi_str,
+        }
+        self._emit(_format_telemetry_line(entry))
+        self._mark_emitted_counter(counter)
 
     def _handle_beacon(self, data):
         # Beacon packets update RSSI tracking state only. Emitting a serial line
@@ -205,38 +194,48 @@ class ReceiverDataModule:
         counter = data.get("c", "nan")
         if self._is_stale_counter(counter):
             return
-        entry = self._get_entry(counter)
-        updates = {}
+        gps_time = data.get("gt", self._last_gps_time)
+        if gps_time not in {"nan", "", None, "NOFIX"}:
+            self._last_gps_time = gps_time
+
+        lat = data.get("x", data.get("la", "nan")) if prefix in {"GPS", "G", "G1"} else "nan"
+        lon = data.get("y", data.get("lo", "nan")) if prefix in {"GPS", "G", "G1"} else "nan"
+        alt = data.get("z", data.get("al", "nan")) if prefix in {"GPS", "G", "G2"} else "nan"
+        speed = data.get("v", data.get("sp", "nan")) if prefix in {"GPS", "G", "G2"} else "nan"
+
+        if lat != "nan":
+            self._last_lat = lat
+        if lon != "nan":
+            self._last_lon = lon
+        if alt != "nan":
+            self._last_alt = alt
+        if speed != "nan":
+            self._last_speed = speed
 
         if prefix in {"GPS", "G", "G1"}:
-            updates["lat"] = data.get("x", data.get("la", "nan"))
-            updates["lon"] = data.get("y", data.get("lo", "nan"))
-            if updates.get("lat", "nan") != "nan" and updates.get("lon", "nan") != "nan":
-                entry["gps_primary_complete"] = True
-        if prefix in {"GPS", "G", "G2"}:
-            updates["alt"] = data.get("z", data.get("al", "nan"))
-            updates["speed"] = data.get("v", data.get("sp", "nan"))
-            # Mark secondary part complete on arrival of G2-style packet.
-            entry["gps_secondary_complete"] = True
+            has_latlon = lat != "nan" and lon != "nan"
+            fix = "1" if has_latlon else "0"
+            self._last_fix = fix
+        else:
+            fix = self._last_fix
 
-        # Combined legacy payload may carry all fields in one packet.
-        if prefix in {"GPS", "G"}:
-            if updates.get("lat", "nan") != "nan" and updates.get("lon", "nan") != "nan":
-                entry["gps_primary_complete"] = True
-            if (
-                "z" in data
-                or "al" in data
-                or "v" in data
-                or "sp" in data
-            ):
-                entry["gps_secondary_complete"] = True
-
-        entry.update(updates)
-        if entry.get("lat", "nan") != "nan" and entry.get("lon", "nan") != "nan":
-            entry["fix"] = "1"
-        if entry.get("gps_primary_complete") and entry.get("gps_secondary_complete"):
-            entry["gps_complete"] = True
-        self._maybe_flush(counter)
+        entry = {
+            "counter": counter,
+            "time": gps_time,
+            "temp": self._last_temp,
+            "pressure": self._last_pressure,
+            "baro": self._last_baro,
+            "humidity": self._last_humidity,
+            "lat": self._last_lat,
+            "lon": self._last_lon,
+            "alt": self._last_alt,
+            "speed": self._last_speed,
+            "fix": fix,
+            "gps_time": gps_time,
+            "rx_rssi": "nan",
+        }
+        self._emit(_format_telemetry_line(entry))
+        self._mark_emitted_counter(counter)
 
     def handle_packet(self, packet):
         if packet is None:
